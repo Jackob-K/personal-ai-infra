@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.models import ApproveProposalRequest, IngestImapRequest
+from app.models import ApproveProposalRequest, IngestImapRequest, IngestImapResponse, TaskProposal
 from app.services.agent_registry import find_channel_agent
 from app.services.assistant_flow import approve_or_reject_proposal, ingest_and_create_proposals
 from app.services.channel_memory import append_message, get_recent_messages
@@ -46,10 +46,7 @@ def _handle_orchestrator(content: str) -> str:
     if lower in {"ingest", "!ingest"}:
         accounts = load_imap_accounts()
         result = ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10))
-        return (
-            f"IMAP ingest hotov. Načteno emailů: {result.emails_count}. "
-            f"Vytvořeno návrhů: {result.proposals_created}."
-        )
+        return _format_ingest_result(result)
     if lower.startswith("approve "):
         return _approve_command(content)
     if lower.startswith("reject "):
@@ -122,12 +119,7 @@ def _format_pending(role_filter: str | None = None) -> str:
     if not pending:
         return "Žádné čekající návrhy."
 
-    lines = []
-    for item in pending[:10]:
-        lines.append(
-            f"- {item.id[:8]} | {item.role} | P{item.priority} | {item.subject or item.summary}"
-        )
-    return "Čekající návrhy:\n" + "\n".join(lines)
+    return "Čekající návrhy:\n" + "\n".join(_proposal_lines(pending))
 
 
 def _role_prefix(role: str) -> str:
@@ -155,3 +147,38 @@ def _resolve_proposal_id(candidate: str) -> str:
     if len(prefix_matches) > 1:
         raise ValueError("Prefix ID není jednoznačný. Použij delší část ID.")
     raise ValueError(f"Proposal '{candidate}' not found")
+
+
+def _format_ingest_result(result: IngestImapResponse) -> str:
+    pending = [item for item in list_proposals() if item.status == "pending"]
+    new_items = [item for item in result.proposals if item.id in set(result.new_proposal_ids)]
+    lines = [
+        "IMAP ingest hotov.",
+        f"Načteno emailů: {result.emails_count}.",
+        f"Nové návrhy: {result.proposals_created}.",
+        f"Již známé nezpracované návrhy znovu nalezeny: {result.proposals_updated}.",
+    ]
+
+    if new_items:
+        lines.append("")
+        lines.append("Nově zachycené návrhy:")
+        lines.extend(_proposal_lines(new_items[:10]))
+
+    if pending:
+        lines.append("")
+        lines.append(f"Celkem čekajících návrhů: {len(pending)}.")
+        lines.extend(_proposal_lines(pending[:10]))
+        if len(pending) > 10:
+            lines.append(f"... a dalších {len(pending) - 10}.")
+    else:
+        lines.append("")
+        lines.append("Žádné čekající návrhy.")
+
+    return "\n".join(lines)
+
+
+def _proposal_lines(items: list[TaskProposal]) -> list[str]:
+    lines: list[str] = []
+    for item in items:
+        lines.append(f"- {item.id[:8]} | {item.role} | P{item.priority} | {item.subject or item.summary}")
+    return lines

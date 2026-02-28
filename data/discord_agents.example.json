@@ -1,13 +1,12 @@
 {
   "guild_name": "My Assistant Server",
   "channels": [
-    {"channel_name": "orchestrator", "agent": "ORCHESTRATOR", "role": "ASISTENT"},
+    {"channel_name": "orchestrator", "agent": "ORCHESTRATOR", "role": "ORCHESTRATOR"},
     {"channel_name": "diplomka", "agent": "DIPLOMKA", "role": "DIPLOMKA"},
     {"channel_name": "profesor", "agent": "PROFESOR", "role": "PROFESOR"},
     {"channel_name": "firma", "agent": "FIRMA_ZAMESTNANI", "role": "FIRMA_ZAMESTNANI"},
     {"channel_name": "startup", "agent": "STARTUP", "role": "STARTUP"},
     {"channel_name": "skola", "agent": "SKOLA", "role": "SKOLA"},
-    {"channel_name": "osobni", "agent": "OSOBNI", "role": "OSOBNI"},
-    {"channel_name": "asistent", "agent": "ASISTENT", "role": "ASISTENT"}
+    {"channel_name": "osobni", "agent": "OSOBNI", "role": "OSOBNI"}
   ]
 }

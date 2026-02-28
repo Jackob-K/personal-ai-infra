@@ -24,9 +24,26 @@ def save_proposals(proposals: list[TaskProposal]) -> None:
         json.dump([p.model_dump(mode="json") for p in proposals], f, ensure_ascii=False, indent=2)
 
 
-def upsert_proposals(new_items: list[TaskProposal]) -> None:
+def upsert_proposals(new_items: list[TaskProposal]) -> tuple[int, int, list[str]]:
     existing = list_proposals()
     by_key = {(p.account_name, p.message_id): p for p in existing}
+    created = 0
+    updated = 0
+    created_ids: list[str] = []
     for item in new_items:
-        by_key[(item.account_name, item.message_id)] = item
+        key = (item.account_name, item.message_id)
+        if key in by_key:
+            existing_item = by_key[key]
+            item.id = existing_item.id
+            item.created_at = existing_item.created_at
+            item.status = existing_item.status
+            item.planned_start = existing_item.planned_start
+            item.planned_end = existing_item.planned_end
+            item.calendar_event_uid = existing_item.calendar_event_uid
+            updated += 1
+        else:
+            created += 1
+            created_ids.append(item.id)
+        by_key[key] = item
     save_proposals(list(by_key.values()))
+    return created, updated, created_ids

@@ -13,7 +13,6 @@ Lokální backend pro osobního AI asistenta, který běží primárně na vlast
   - `STARTUP`
   - `SKOLA`
   - `OSOBNI`
-  - `ASISTENT`
 - generování návrhů úkolů se schválením
 - plánování časového slotu
 - zápis do CalDAV kalendáře
@@ -28,10 +27,9 @@ Doporučené kanály na Discord serveru:
 - `#startup`
 - `#skola`
 - `#osobni`
-- `#asistent`
 
 Logika:
-- `#orchestrator` je hlavní řídicí kanál
+- `#orchestrator` je hlavní řídicí kanál a přebírá i původní koordinační roli asistenta
 - ostatní kanály jsou dlouhodobé kontexty specializovaných agentů
 - mapování kanálů se načítá z `data/runtime/discord_agents.json`
 - pokud runtime soubor neexistuje, použije se `data/discord_agents.example.json`
@@ -100,7 +98,7 @@ Soubor `data/discord_agents.example.json`:
 {
   "guild_name": "My Assistant Server",
   "channels": [
-    {"channel_name": "orchestrator", "agent": "ORCHESTRATOR", "role": "ASISTENT"},
+    {"channel_name": "orchestrator", "agent": "ORCHESTRATOR", "role": "ORCHESTRATOR"},
     {"channel_name": "diplomka", "agent": "DIPLOMKA", "role": "DIPLOMKA"}
   ]
 }
@@ -146,6 +144,11 @@ V kanálu `#orchestrator`:
 
 V tematických kanálech můžeš zatím psát přirozeně. Bot vrátí odpověď v rámci role a drží jednoduchou per-channel paměť v `data/runtime/channel_memory.json`.
 
+Poznámka k `ingest`:
+- vypíše počty načtených emailů
+- vypíše nově zachycené návrhy
+- znovu připomene všechny stále čekající návrhy, aby se neztratily v chatu
+
 ## Jak založit Discord bota
 1. Otevři Discord Developer Portal.
 2. Vytvoř `New Application`.
@@ -162,7 +165,7 @@ V tematických kanálech můžeš zatím psát přirozeně. Bot vrátí odpově�
 
 ## První praktický setup
 1. Založ soukromý Discord server.
-2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `firma`, `startup`, `skola`, `osobni`, `asistent`.
+2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `firma`, `startup`, `skola`, `osobni`.
 3. Zkopíruj `data/discord_agents.example.json` do `data/runtime/discord_agents.json`.
 4. Uprav názvy kanálů, pokud se liší.
 5. Zkopíruj `data/imap_accounts.example.json` do `data/runtime/imap_accounts.json`.

@@ -52,10 +52,12 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
             )
         )
 
-    upsert_proposals(proposals)
+    created_count, updated_count, created_ids = upsert_proposals(proposals)
     return IngestImapResponse(
         emails_count=len(emails),
-        proposals_created=len(proposals),
+        proposals_created=created_count,
+        proposals_updated=updated_count,
+        new_proposal_ids=created_ids,
         proposals=proposals,
     )
 

@@ -94,6 +94,8 @@ class TaskProposal(BaseModel):
 class IngestImapResponse(BaseModel):
     emails_count: int
     proposals_created: int
+    proposals_updated: int = 0
+    new_proposal_ids: list[str] = Field(default_factory=list)
     proposals: list[TaskProposal]
 
 
