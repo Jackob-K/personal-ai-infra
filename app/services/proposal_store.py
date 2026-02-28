@@ -7,7 +7,7 @@ from app.models import TaskProposal
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-PROPOSALS_PATH = BASE_DIR / "data" / "proposals.json"
+PROPOSALS_PATH = BASE_DIR / "data" / "runtime" / "proposals.json"
 
 
 def list_proposals() -> list[TaskProposal]:

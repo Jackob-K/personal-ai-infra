@@ -22,7 +22,12 @@ from app.services.proposal_store import list_proposals
 from app.services.travel import estimate_travel
 
 
-app = FastAPI(title="AI Server", version="0.3.0")
+app = FastAPI(title="AI Server", version="0.4.0")
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return {"message": "AI Server is running. Open /docs for API documentation."}
 
 
 @app.get("/health")

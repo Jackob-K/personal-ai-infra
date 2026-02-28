@@ -1,0 +1,13 @@
+{
+  "accounts": [
+    {
+      "name": "postcz",
+      "host": "imap.post.cz",
+      "port": 993,
+      "username": "you@post.cz",
+      "password_env": "IMAP_POST_PASSWORD",
+      "folder": "INBOX",
+      "unseen_only": true
+    }
+  ]
+}

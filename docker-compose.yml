@@ -14,6 +14,20 @@ services:
     depends_on:
       - ollama
 
+  discord-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-server-discord
+    restart: unless-stopped
+    command: ["python", "-m", "app.discord_bot"]
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - ai-server
+
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -25,4 +39,3 @@ services:
 
 volumes:
   ollama-data:
-
