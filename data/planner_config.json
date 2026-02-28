@@ -1,0 +1,34 @@
+{
+  "day_window": {
+    "start": "05:00",
+    "end": "22:00"
+  },
+  "fixed_block_rules": [
+    {
+      "label": "Morning job shift",
+      "role": "FIRMA_ZAMESTNANI",
+      "days": ["mon", "wed", "fri"],
+      "start": "05:30",
+      "end": "14:00",
+      "commute_before_minutes": 20,
+      "commute_after_minutes": 20,
+      "commute_before_label": "Commute to work",
+      "commute_after_label": "Commute from work"
+    },
+    {
+      "label": "Assistant focus",
+      "role": "ASISTENT",
+      "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+      "start": "14:30",
+      "end": "15:00"
+    }
+  ],
+  "travel_defaults": {
+    "home_location": "HOME_ADDRESS_PLACEHOLDER",
+    "school_location": "SCHOOL_ADDRESS_PLACEHOLDER",
+    "school_one_way_minutes": 30,
+    "provider": "google_maps",
+    "mode": "transit"
+  }
+}
+

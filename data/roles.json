@@ -1,0 +1,37 @@
+{
+  "DIPLOMKA": {
+    "priority": 4,
+    "default_duration_minutes": 60,
+    "context": "Thesis work, writing, research, deadlines."
+  },
+  "PROFESOR": {
+    "priority": 4,
+    "default_duration_minutes": 30,
+    "context": "Academic communication and student-related messages."
+  },
+  "FIRMA_ZAMESTNANI": {
+    "priority": 5,
+    "default_duration_minutes": 0,
+    "context": "Employment role with scheduled shifts and commute buffers."
+  },
+  "STARTUP": {
+    "priority": 3,
+    "default_duration_minutes": 45,
+    "context": "Startup operations, invoices, product tasks."
+  },
+  "SKOLA": {
+    "priority": 3,
+    "default_duration_minutes": 45,
+    "context": "School classes, assignments, admin."
+  },
+  "OSOBNI": {
+    "priority": 2,
+    "default_duration_minutes": 20,
+    "context": "Personal agenda and general life admin."
+  },
+  "ASISTENT": {
+    "priority": 4,
+    "default_duration_minutes": 30,
+    "context": "Dedicated block for reviewing and steering AI assistant tasks."
+  }
+}
