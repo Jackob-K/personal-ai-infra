@@ -119,10 +119,22 @@ Soubor `data/imap_accounts.example.json`:
       "password_env": "IMAP_POST_PASSWORD",
       "folder": "INBOX",
       "unseen_only": true
+    },
+    {
+      "name": "tul",
+      "host": "mbox.tul.cz",
+      "port": 993,
+      "username": "jmeno.prijmeni@tul.cz",
+      "password_env": "IMAP_TUL_PASSWORD",
+      "folder": "INBOX",
+      "unseen_only": true
     }
   ]
 }
 ```
+
+Poznámka:
+- IMAP ingest běží read-only a používá `BODY.PEEK`, takže zprávy nemá označovat jako přečtené.
 
 ## Discord příkazy
 V kanálu `#orchestrator`:

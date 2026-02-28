@@ -8,6 +8,15 @@
       "password_env": "IMAP_POST_PASSWORD",
       "folder": "INBOX",
       "unseen_only": true
+    },
+    {
+      "name": "tul",
+      "host": "mbox.tul.cz",
+      "port": 993,
+      "username": "jmeno.prijmeni@tul.cz",
+      "password_env": "IMAP_TUL_PASSWORD",
+      "folder": "INBOX",
+      "unseen_only": true
     }
   ]
 }

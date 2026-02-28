@@ -21,7 +21,8 @@ def fetch_emails(accounts: list[InboxAccountConfig], max_per_account: int) -> li
         try:
             with imaplib.IMAP4_SSL(account.host, account.port) as client:
                 client.login(account.username, password)
-                client.select(account.folder)
+                # Read-only mailbox access prevents the assistant from changing message flags.
+                client.select(account.folder, readonly=True)
                 criteria = "UNSEEN" if account.unseen_only else "ALL"
                 status, raw_ids = client.search(None, criteria)
                 if status != "OK" or not raw_ids:
@@ -29,7 +30,7 @@ def fetch_emails(accounts: list[InboxAccountConfig], max_per_account: int) -> li
 
                 ids = raw_ids[0].split()
                 for message_id in ids[-max_per_account:]:
-                    status, fetched = client.fetch(message_id, "(RFC822)")
+                    status, fetched = client.fetch(message_id, "(BODY.PEEK[])")
                     if status != "OK" or not fetched or not fetched[0]:
                         continue
 
