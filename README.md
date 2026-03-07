@@ -4,15 +4,16 @@ Lokální backend pro osobního AI asistenta, který běží primárně na vlast
 - `FastAPI backend`: email triage, návrhy úkolů, plánování, CalDAV
 - `Discord bot`: chatové rozhraní s orchestrátorem a specializovanými asistenty
 
-## Co umí v `v0.4`
+## Co umí v `v0.5`
 - IMAP ingest z více schránek přes `POST /imap/ingest`
 - klasifikaci emailů do rolí:
   - `DIPLOMKA`
   - `PROFESOR`
   - `FIRMA_ZAMESTNANI`
   - `TOKVEKO`
-  - `SKOLA`
+  - `UNIVERZITA`
   - `OSOBNI`
+  - `NEWSLETTER`
   - `SPAM`
   - `PHISHING`
 - generování návrhů úkolů se schválením
@@ -27,7 +28,7 @@ Doporučené kanály na Discord serveru:
 - `#profesor`
 - `#firma`
 - `#tokveko`
-- `#skola`
+- `#univerzita`
 - `#osobni`
 
 Logika:
@@ -149,6 +150,7 @@ V kanálu `#orchestrator`:
 - `ingest`
 - `set-role <proposal_id> <ROLE>`
 - `set-priority <proposal_id> <1-5>`
+- `mark-newsletter <proposal_id>`
 - `mark-spam <proposal_id>`
 - `mark-phishing <proposal_id>`
 - `approve <proposal_id> [YYYY-MM-DD]`
@@ -186,7 +188,7 @@ Web triage:
 
 ## První praktický setup
 1. Založ soukromý Discord server.
-2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `firma`, `tokveko`, `skola`, `osobni`.
+2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `firma`, `tokveko`, `univerzita`, `osobni`.
 3. Zkopíruj `data/discord_agents.example.json` do `data/runtime/discord_agents.json`.
 4. Uprav názvy kanálů, pokud se liší.
 5. Zkopíruj `data/imap_accounts.example.json` do `data/runtime/imap_accounts.json`.

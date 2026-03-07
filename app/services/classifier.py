@@ -10,16 +10,17 @@ from app.services.roles import load_roles
 
 
 KEYWORD_MAP: list[tuple[str, str]] = [
-    ("unsubscribe", "SPAM"),
-    ("odhlasit", "SPAM"),
-    ("newsletter", "SPAM"),
-    ("vyher", "SPAM"),
-    ("lottery", "SPAM"),
+    ("unsubscribe", "NEWSLETTER"),
+    ("odhlasit", "NEWSLETTER"),
+    ("newsletter", "NEWSLETTER"),
+    ("odběr", "NEWSLETTER"),
     ("phishing", "PHISHING"),
     ("verify your account", "PHISHING"),
     ("suspicious login", "PHISHING"),
     ("reset password", "PHISHING"),
     ("bitcoin", "PHISHING"),
+    ("vyher", "SPAM"),
+    ("lottery", "SPAM"),
     ("diplom", "DIPLOMKA"),
     ("thesis", "DIPLOMKA"),
     ("profesor", "PROFESOR"),
@@ -29,9 +30,16 @@ KEYWORD_MAP: list[tuple[str, str]] = [
     ("tokveko", "TOKVEKO"),
     ("smena", "FIRMA_ZAMESTNANI"),
     ("shift", "FIRMA_ZAMESTNANI"),
-    ("zkouska", "SKOLA"),
-    ("school", "SKOLA"),
+    ("zkouska", "UNIVERZITA"),
+    ("school", "UNIVERZITA"),
+    ("univerzita", "UNIVERZITA"),
 ]
+
+
+ROLE_ALIASES = {
+    "STARTUP": "TOKVEKO",
+    "SKOLA": "UNIVERZITA",
+}
 
 
 def classify_email(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
@@ -46,14 +54,18 @@ def classify_email(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
         result = _classify_heuristic(payload)
 
     learned_role, learned_priority = apply_feedback(payload.sender, result.role, result.priority)
-    result.role = learned_role
+    result.role = _normalize_role(learned_role)
     result.priority = max(1, min(5, learned_priority))
-    if result.role in {"SPAM", "PHISHING"}:
+
+    if result.role in {"SPAM", "PHISHING", "NEWSLETTER"}:
         result.requires_action = True
         if result.role == "SPAM":
             result.suggested_duration_minutes = 5
         if result.role == "PHISHING":
             result.suggested_duration_minutes = 10
+        if result.role == "NEWSLETTER":
+            result.suggested_duration_minutes = 8
+
     return result
 
 
@@ -88,6 +100,7 @@ def _classify_via_ollama(payload: EmailClassifyRequest) -> ClassifyEmailResponse
             raw = json.loads(resp.read().decode("utf-8"))
         content = raw.get("message", {}).get("content", "{}")
         parsed = json.loads(content)
+        parsed["role"] = _normalize_role(str(parsed.get("role", "OSOBNI")))
         return ClassifyEmailResponse(**parsed)
     except (error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
         return None
@@ -104,6 +117,7 @@ def _classify_heuristic(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
     requires_action = any(token in text for token in ["pros", "urgent", "deadline", "term", "reply", "odpove"])
     priority = 4 if "urgent" in text or "asap" in text else 3 if requires_action else 2
     suggested_duration = 45 if requires_action else 20
+
     if role == "SPAM":
         requires_action = True
         priority = 1
@@ -112,12 +126,22 @@ def _classify_heuristic(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
         requires_action = True
         priority = 5
         suggested_duration = 10
+    if role == "NEWSLETTER":
+        requires_action = True
+        priority = 4
+        suggested_duration = 8
+
     summary_source = payload.subject.strip() or payload.body.strip()[:120] or "Email without clear content."
 
     return ClassifyEmailResponse(
-        role=role,
+        role=_normalize_role(role),
         requires_action=requires_action,
         suggested_duration_minutes=suggested_duration,
         priority=priority,
         summary=summary_source,
     )
+
+
+def _normalize_role(role: str) -> str:
+    normalized = role.upper().strip()
+    return ROLE_ALIASES.get(normalized, normalized)

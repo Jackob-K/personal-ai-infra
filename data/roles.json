@@ -19,20 +19,25 @@
     "default_duration_minutes": 45,
     "context": "TOKVEKO operations, invoices, product tasks."
   },
-  "SKOLA": {
+  "UNIVERZITA": {
     "priority": 3,
     "default_duration_minutes": 45,
-    "context": "School classes, assignments, admin."
+    "context": "University classes, assignments, administration."
   },
   "OSOBNI": {
     "priority": 2,
     "default_duration_minutes": 20,
     "context": "Personal agenda and general life admin."
   },
+  "NEWSLETTER": {
+    "priority": 4,
+    "default_duration_minutes": 8,
+    "context": "Emails to unsubscribe quickly and clean inbox subscriptions."
+  },
   "SPAM": {
     "priority": 1,
     "default_duration_minutes": 5,
-    "context": "Unwanted email, newsletters, and promotional mail."
+    "context": "Unwanted email, promotions, and low-value junk."
   },
   "PHISHING": {
     "priority": 5,

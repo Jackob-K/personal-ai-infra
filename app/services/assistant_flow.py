@@ -18,6 +18,9 @@ from app.services.planner import plan_task_slot
 from app.services.proposal_store import list_proposals, save_proposals, upsert_proposals
 
 
+NON_CALENDAR_ROLES = {"SPAM", "PHISHING", "NEWSLETTER"}
+
+
 def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapResponse:
     emails = fetch_emails(payload.accounts, payload.max_per_account)
     proposals: list[TaskProposal] = []
@@ -32,7 +35,7 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
             )
         )
 
-        if not classified.requires_action and classified.role not in {"SPAM", "PHISHING"}:
+        if not classified.requires_action and classified.role not in NON_CALENDAR_ROLES:
             continue
 
         proposals.append(
@@ -81,7 +84,7 @@ def approve_or_reject_proposal(proposal_id: str, payload: ApproveProposalRequest
     if payload.duration_minutes:
         proposal.duration_minutes = payload.duration_minutes
 
-    if proposal.role in {"SPAM", "PHISHING"}:
+    if proposal.role in NON_CALENDAR_ROLES:
         proposal.planned_start = None
         proposal.planned_end = None
         proposal.calendar_event_uid = None
@@ -138,6 +141,8 @@ def _build_plan_payload(role: str, title: str, duration_minutes: int, planning_d
 
 
 def _make_next_step(role: str, subject: str) -> str:
+    if role == "NEWSLETTER":
+        return "Rychle se odhlas z newsletteru a případně nastav filtr/blokaci."
     if role == "SPAM":
         return "Ověř spam a ručně odhlaš subscription nebo nastav blokaci odesílatele."
     if role == "PHISHING":
@@ -150,6 +155,6 @@ def _make_next_step(role: str, subject: str) -> str:
         return "Potvrď směnu nebo pracovní požadavek a zapiš návazný blok v kalendáři."
     if role == "TOKVEKO":
         return "Sepiš 3-bodový akční plán pro TOKVEKO a pošli follow-up."
-    if role == "SKOLA":
+    if role == "UNIVERZITA":
         return "Zkontroluj deadline a vlož přípravu do nejbližšího volného bloku."
     return f"Navrhni první konkrétní krok k tématu: {subject[:80]}"

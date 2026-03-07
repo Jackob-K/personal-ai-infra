@@ -121,7 +121,7 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
     body = (
         "<h1>Triage Inbox</h1>"
         f"{notice}"
-        "<p>Uprav roli/prioritu a potvrď. SPAM/PHISHING se po schválení neplánují do kalendáře.</p>"
+        "<p>Uprav roli/prioritu a potvrď. SPAM/PHISHING/NEWSLETTER se po schválení neplánují do kalendáře.</p>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
         "<thead><tr><th>ID</th><th>Odesílatel</th><th>Role</th><th>P</th><th>Náhled</th><th>Akce</th></tr></thead>"
         "<tbody>"

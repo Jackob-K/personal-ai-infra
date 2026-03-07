@@ -9,6 +9,11 @@ from app.models import TaskProposal
 BASE_DIR = Path(__file__).resolve().parents[2]
 PROPOSALS_PATH = BASE_DIR / "data" / "runtime" / "proposals.json"
 
+ROLE_ALIASES = {
+    "STARTUP": "TOKVEKO",
+    "SKOLA": "UNIVERZITA",
+}
+
 
 def list_proposals() -> list[TaskProposal]:
     if not PROPOSALS_PATH.exists():
@@ -16,8 +21,9 @@ def list_proposals() -> list[TaskProposal]:
     with PROPOSALS_PATH.open("r", encoding="utf-8") as f:
         raw = json.load(f)
     for item in raw:
-        if item.get("role") == "STARTUP":
-            item["role"] = "TOKVEKO"
+        role = str(item.get("role", "")).upper()
+        if role in ROLE_ALIASES:
+            item["role"] = ROLE_ALIASES[role]
     return [TaskProposal(**item) for item in raw]
 
 

@@ -6,7 +6,7 @@
     {"channel_name": "profesor", "agent": "PROFESOR", "role": "PROFESOR"},
     {"channel_name": "firma", "agent": "FIRMA_ZAMESTNANI", "role": "FIRMA_ZAMESTNANI"},
     {"channel_name": "tokveko", "agent": "TOKVEKO", "role": "TOKVEKO"},
-    {"channel_name": "skola", "agent": "SKOLA", "role": "SKOLA"},
+    {"channel_name": "univerzita", "agent": "UNIVERZITA", "role": "UNIVERZITA"},
     {"channel_name": "osobni", "agent": "OSOBNI", "role": "OSOBNI"}
   ]
 }

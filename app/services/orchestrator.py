@@ -13,6 +13,14 @@ from app.services.proposal_store import list_proposals, save_proposals
 from app.services.roles import load_roles
 
 
+ROLE_ALIASES = {
+    "STARTUP": "TOKVEKO",
+    "SKOLA": "UNIVERZITA",
+}
+
+NON_CALENDAR_ROLES = {"SPAM", "PHISHING", "NEWSLETTER"}
+
+
 HELP_TEXT = """Dostupné příkazy:
 - help
 - triage
@@ -21,6 +29,7 @@ HELP_TEXT = """Dostupné příkazy:
 - pokracuj
 - set-role <proposal_id> <ROLE>
 - set-priority <proposal_id> <1-5>
+- mark-newsletter <proposal_id>
 - mark-spam <proposal_id>
 - mark-phishing <proposal_id>
 - approve <proposal_id> [YYYY-MM-DD]
@@ -64,6 +73,8 @@ def _handle_orchestrator(content: str) -> str:
         return _set_role_command(content)
     if lower.startswith("set-priority "):
         return _set_priority_command(content)
+    if lower.startswith("mark-newsletter "):
+        return _set_role_shortcut(content, "NEWSLETTER")
     if lower.startswith("mark-spam "):
         return _set_role_shortcut(content, "SPAM")
     if lower.startswith("mark-phishing "):
@@ -110,12 +121,13 @@ def _approve_command(content: str) -> str:
         )
     except ValueError as exc:
         return str(exc)
+
     if proposal.planned_start and proposal.planned_end:
         return (
             f"Návrh {proposal.id} schválen. "
             f"Naplánováno {proposal.planned_start.isoformat()} -> {proposal.planned_end.isoformat()}."
         )
-    if proposal.role in {"SPAM", "PHISHING"}:
+    if proposal.role in NON_CALENDAR_ROLES:
         return f"Návrh {proposal.id} schválen jako {proposal.role}. Nebyl plánován do kalendáře."
     return f"Návrh {proposal.id} schválen, ale nepodařilo se najít časový slot."
 
@@ -138,6 +150,7 @@ def _reject_command(content: str) -> str:
 def _format_pending(role_filter: str | None = None) -> str:
     pending = [item for item in list_proposals() if item.status == "pending"]
     if role_filter:
+        role_filter = _normalize_role(role_filter)
         pending = [item for item in pending if item.role == role_filter]
     if not pending:
         return "Žádné čekající návrhy."
@@ -162,7 +175,9 @@ def _format_triage() -> str:
         rows.append(f"... a dalších {len(pending) - 15} položek.")
 
     rows.append("")
-    rows.append("Úpravy: set-role <id> <ROLE>, set-priority <id> <1-5>, approve <id>, reject <id>")
+    rows.append(
+        "Úpravy: set-role <id> <ROLE>, set-priority <id> <1-5>, mark-newsletter <id>, approve <id>, reject <id>"
+    )
     return "```text\n" + "\n".join(rows) + "\n```"
 
 
@@ -171,8 +186,8 @@ def _set_role_command(content: str) -> str:
     if len(parts) < 3:
         return "Použití: set-role <proposal_id> <ROLE>"
     proposal_id = _resolve_proposal_id(parts[1])
-    role = parts[2].upper()
-    allowed_roles = set(load_roles().keys()) | {"SPAM", "PHISHING"}
+    role = _normalize_role(parts[2])
+    allowed_roles = set(load_roles().keys()) | {"SPAM", "PHISHING", "NEWSLETTER"}
     if role not in allowed_roles:
         return f"Neznámá role '{role}'. Dostupné: {', '.join(sorted(allowed_roles))}"
 
@@ -223,6 +238,8 @@ def _set_priority_command(content: str) -> str:
 def _set_role_shortcut(content: str, role: str) -> str:
     parts = content.split()
     if len(parts) < 2:
+        if role == "NEWSLETTER":
+            return "Použití: mark-newsletter <proposal_id>"
         return f"Použití: {'mark-spam' if role == 'SPAM' else 'mark-phishing'} <proposal_id>"
     return _set_role_command(f"set-role {parts[1]} {role}")
 
@@ -233,12 +250,13 @@ def _role_prefix(role: str) -> str:
         "PROFESOR": "Agent PROFESOR řeší akademickou komunikaci a odpovědi.",
         "FIRMA_ZAMESTNANI": "Agent FIRMA_ZAMESTNANI řeší směny, práci a navazující bloky.",
         "TOKVEKO": "Agent TOKVEKO řeší operativu a follow-upy firmy TOKVEKO.",
-        "SKOLA": "Agent SKOLA řeší studijní administrativu a přípravu.",
+        "UNIVERZITA": "Agent UNIVERZITA řeší studijní administrativu a přípravu.",
         "OSOBNI": "Agent OSOBNI řeší osobní agendu.",
+        "NEWSLETTER": "Agent NEWSLETTER řeší rychlé odhlášení odběrů.",
         "SPAM": "Agent SPAM řeší nevyžádané zprávy a subscriptions.",
         "PHISHING": "Agent PHISHING řeší bezpečnostní a podvodné zprávy.",
     }
-    return mapping.get(role, f"Agent {role} je aktivní.")
+    return mapping.get(_normalize_role(role), f"Agent {role} je aktivní.")
 
 
 def _resolve_proposal_id(candidate: str) -> str:
@@ -298,6 +316,9 @@ def _proposal_lines(items: list[TaskProposal]) -> list[str]:
 
 
 def _next_step_for_role(role: str, subject: str) -> str:
+    role = _normalize_role(role)
+    if role == "NEWSLETTER":
+        return "Rychle se odhlas z newsletteru a případně nastav filtr/blokaci."
     if role == "SPAM":
         return "Ověř spam a ručně odhlaš subscription nebo nastav blokaci odesílatele."
     if role == "PHISHING":
@@ -310,6 +331,11 @@ def _next_step_for_role(role: str, subject: str) -> str:
         return "Potvrď směnu nebo pracovní požadavek a zapiš návazný blok v kalendáři."
     if role == "TOKVEKO":
         return "Sepiš 3-bodový akční plán pro TOKVEKO a pošli follow-up."
-    if role == "SKOLA":
+    if role == "UNIVERZITA":
         return "Zkontroluj deadline a vlož přípravu do nejbližšího volného bloku."
     return f"Navrhni první konkrétní krok k tématu: {subject[:80]}"
+
+
+def _normalize_role(role: str) -> str:
+    normalized = role.upper().strip()
+    return ROLE_ALIASES.get(normalized, normalized)
