@@ -43,6 +43,7 @@ Logika:
 - `GET /web/channels`
 - `GET /web/channel/{channel_name}`
 - `POST /web/ingest`
+- `POST /web/task-update`
 - `POST /web/task-status`
 - `GET /health`
 - `GET /triage` (web triage UI)
@@ -156,6 +157,8 @@ V kanálu `#orchestrator`:
 - `dispatch`
 - `start <proposal_id>`
 - `done <proposal_id>`
+- `set-group <proposal_id> <GROUP>`
+- `comment <proposal_id> <TEXT>`
 - `set-role <proposal_id> <ROLE>`
 - `set-priority <proposal_id> <1-5>`
 - `mark-newsletter <proposal_id>`
@@ -173,6 +176,7 @@ Poznámka k `ingest`:
 - připojí odkaz na web triage (`TRIAGE_WEB_URL`)
 - návrhy můžeš před schválením upravit přes `set-role` a `set-priority`
 - ruční opravy se ukládají jako feedback (učení podle odesílatele)
+- schválení v aktuálním pipeline automaticky nic neplánuje do kalendáře (kalendář řešíš ručně až v dalším kroku)
 
 Web triage:
 - otevři `/triage`
@@ -181,7 +185,15 @@ Web triage:
 - pokud je vše správně, klikni `Pokračuj (uloží vše)` (stejnou větu můžeš napsat i do Discordu)
 - když máš vše připravené najednou, použij `Uložit + Schválit vše`
 - pro přehled používej `/web` a `/web/channels`
-- detail kanálu otevřeš přes `/web/channel/<nazev_kanalu>` (např. `/web/channel/klimatika`), kde můžeš task dát do `in_progress` nebo `done`
+- detail kanálu otevřeš přes `/web/channel/<nazev_kanalu>` (např. `/web/channel/klimatika`)
+- v detailu kanálu můžeš doplnit `Skupinu` (větší úkol), přidat `Komentář` a změnit stav na `Rozpracováno/Hotovo`
+
+## Aktuální pipeline (manuální kalendář)
+1. `ingest` načte emaily a připraví návrhy.
+2. V `/triage` upravíš role/prioritu a dáš `Uložit + Schválit vše`.
+3. V Discord `#orchestrator` spustíš `dispatch`.
+4. V `/web/channel/<kanal>` průběžně doplňuješ komentáře, skupiny a stav (`in_progress`/`done`).
+5. Plánování do kalendáře je v této fázi manuální.
 
 ## Jak založit Discord bota
 1. Otevři Discord Developer Portal.

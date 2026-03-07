@@ -110,19 +110,21 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
             f"<td><code>{html.escape(item.id[:8])}</code></td>"
             f"<td>{html.escape(item.status)}</td>"
             f"<td>P{item.priority}</td>"
+            f"<td>{html.escape(item.task_group or '')}</td>"
             f"<td>{html.escape((item.subject or item.summary or '')[:120])}</td>"
+            f"<td>{html.escape(item.comments[-1] if item.comments else '')}</td>"
             "<td>"
-            "<form method='post' action='/web/task-status' style='display:inline'>"
+            "<form method='post' action='/web/task-update' style='display:inline'>"
             f"<input type='hidden' name='proposal_id' value='{html.escape(item.id)}'>"
             f"<input type='hidden' name='channel_name' value='{html.escape(channel_name)}'>"
-            "<input type='hidden' name='status' value='in_progress'>"
-            "<button type='submit'>Start</button>"
-            "</form> "
-            "<form method='post' action='/web/task-status' style='display:inline'>"
-            f"<input type='hidden' name='proposal_id' value='{html.escape(item.id)}'>"
-            f"<input type='hidden' name='channel_name' value='{html.escape(channel_name)}'>"
-            "<input type='hidden' name='status' value='done'>"
-            "<button type='submit'>Done</button>"
+            f"<input type='text' name='task_group' placeholder='Skupina' value='{html.escape(item.task_group or '')}' style='width:140px'> "
+            "<input type='text' name='comment' placeholder='Komentář' style='width:220px'> "
+            "<select name='status'>"
+            "<option value='keep'>Stav beze změny</option>"
+            "<option value='in_progress'>Rozpracováno</option>"
+            "<option value='done'>Hotovo</option>"
+            "</select> "
+            "<button type='submit'>Uložit</button>"
             "</form>"
             "</td>"
             "</tr>"
@@ -133,12 +135,39 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
         f"<p>Role: <b>{html.escape(role)}</b></p>"
         f"{notice}"
         "<table border='1' cellpadding='6' cellspacing='0'>"
-        "<thead><tr><th>ID</th><th>Stav</th><th>Priorita</th><th>Náhled</th><th>Akce</th></tr></thead>"
+        "<thead><tr><th>ID</th><th>Stav</th><th>Priorita</th><th>Skupina</th><th>Náhled</th><th>Poslední komentář</th><th>Akce</th></tr></thead>"
         "<tbody>"
-        + ("".join(rows) if rows else "<tr><td colspan='5'>Žádné položky</td></tr>")
+        + ("".join(rows) if rows else "<tr><td colspan='7'>Žádné položky</td></tr>")
         + "</tbody></table>"
     )
     return HTMLResponse(_page(body, active="channels"))
+
+
+@app.post("/web/task-update")
+async def web_task_update(request: Request) -> RedirectResponse:
+    form = await request.form()
+    proposal_id = str(form.get("proposal_id", "")).strip()
+    channel_name = str(form.get("channel_name", "")).strip()
+    status = str(form.get("status", "keep")).strip()
+    task_group = str(form.get("task_group", "")).strip()
+    comment = str(form.get("comment", "")).strip()
+
+    proposals = list_proposals()
+    proposal = _find_proposal_by_id_prefix(proposals, proposal_id)
+    if proposal is None:
+        return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Proposal+nenalezen", status_code=303)
+
+    if task_group:
+        proposal.task_group = task_group[:120]
+    if comment:
+        proposal.comments.append(comment[:500])
+    if status in {"in_progress", "done"}:
+        proposal.status = status
+    elif status != "keep":
+        return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Neznamy+status", status_code=303)
+
+    save_proposals(proposals)
+    return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Zmena+ulozena", status_code=303)
 
 
 @app.post("/web/task-status")
@@ -283,7 +312,10 @@ async def triage_submit(request: Request) -> RedirectResponse:
                 return RedirectResponse(url=f"/triage?msg={error}", status_code=303)
         save_proposals(proposals)
         for proposal in pending:
-            approve_or_reject_proposal(proposal.id, ApproveProposalRequest(approve=True, planning_date=date.today()))
+            approve_or_reject_proposal(
+                proposal.id,
+                ApproveProposalRequest(approve=True, planning_date=date.today(), auto_schedule_to_caldav=False),
+            )
         return RedirectResponse(url="/triage?msg=Vse+ulozeno+a+schvaleno", status_code=303)
 
     if ":" not in action:
@@ -304,7 +336,10 @@ async def triage_submit(request: Request) -> RedirectResponse:
     save_proposals(proposals)
 
     if verb == "approve":
-        approve_or_reject_proposal(proposal.id, ApproveProposalRequest(approve=True, planning_date=date.today()))
+        approve_or_reject_proposal(
+            proposal.id,
+            ApproveProposalRequest(approve=True, planning_date=date.today(), auto_schedule_to_caldav=False),
+        )
         return RedirectResponse(url="/triage?msg=Polozka+schvalena", status_code=303)
 
     return RedirectResponse(url="/triage?msg=Zmeny+ulozeny", status_code=303)

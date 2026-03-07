@@ -31,6 +31,8 @@ HELP_TEXT = """Dostupné příkazy:
 - pokracuj
 - start <proposal_id>
 - done <proposal_id>
+- set-group <proposal_id> <GROUP>
+- comment <proposal_id> <TEXT>
 - set-role <proposal_id> <ROLE>
 - set-priority <proposal_id> <1-5>
 - mark-newsletter <proposal_id>
@@ -81,6 +83,10 @@ def _handle_orchestrator(content: str) -> str:
         return _status_command(content, target_status="in_progress")
     if cmd == "done":
         return _status_command(content, target_status="done")
+    if cmd == "set-group":
+        return _set_group_command(content)
+    if cmd == "comment":
+        return _comment_command(content)
     if cmd == "set-role":
         return _set_role_command(content)
     if cmd == "set-priority":
@@ -129,7 +135,7 @@ def _approve_command(content: str) -> str:
     try:
         proposal = approve_or_reject_proposal(
             proposal_id,
-            ApproveProposalRequest(approve=True, planning_date=planning_date, auto_schedule_to_caldav=True),
+            ApproveProposalRequest(approve=True, planning_date=planning_date, auto_schedule_to_caldav=False),
         )
     except ValueError as exc:
         return str(exc)
@@ -141,7 +147,7 @@ def _approve_command(content: str) -> str:
         )
     if proposal.role in NON_CALENDAR_ROLES:
         return f"Návrh {proposal.id} schválen jako {proposal.role}. Nebyl plánován do kalendáře."
-    return f"Návrh {proposal.id} schválen, ale nepodařilo se najít časový slot."
+    return f"Návrh {proposal.id} schválen. Plánování je v tomto režimu manuální."
 
 
 def _reject_command(content: str) -> str:
@@ -169,6 +175,48 @@ def _status_command(content: str, target_status: str) -> str:
     except ValueError as exc:
         return str(exc)
     return f"Proposal {updated.id[:8]} má stav: {updated.status}."
+
+
+def _set_group_command(content: str) -> str:
+    parts = content.split(maxsplit=2)
+    if len(parts) < 3:
+        return "Použití: set-group <proposal_id> <GROUP>"
+    try:
+        proposal_id = _resolve_proposal_id(parts[1])
+    except ValueError as exc:
+        return str(exc)
+    group = parts[2].strip()
+    if not group:
+        return "Group nesmí být prázdná."
+
+    proposals = list_proposals()
+    proposal = next((item for item in proposals if item.id == proposal_id), None)
+    if proposal is None:
+        return f"Proposal '{proposal_id}' not found"
+    proposal.task_group = group
+    save_proposals(proposals)
+    return f"Proposal {proposal.id[:8]} má skupinu: {group}."
+
+
+def _comment_command(content: str) -> str:
+    parts = content.split(maxsplit=2)
+    if len(parts) < 3:
+        return "Použití: comment <proposal_id> <TEXT>"
+    try:
+        proposal_id = _resolve_proposal_id(parts[1])
+    except ValueError as exc:
+        return str(exc)
+    note = parts[2].strip()
+    if not note:
+        return "Komentář nesmí být prázdný."
+
+    proposals = list_proposals()
+    proposal = next((item for item in proposals if item.id == proposal_id), None)
+    if proposal is None:
+        return f"Proposal '{proposal_id}' not found"
+    proposal.comments.append(note[:500])
+    save_proposals(proposals)
+    return f"Komentář uložen k {proposal.id[:8]}."
 
 
 def _format_pending(role_filter: str | None = None) -> str:

@@ -92,6 +92,13 @@ def approve_or_reject_proposal(proposal_id: str, payload: ApproveProposalRequest
         save_proposals(proposals)
         return proposal
 
+    if not payload.auto_schedule_to_caldav:
+        proposal.planned_start = None
+        proposal.planned_end = None
+        proposal.calendar_event_uid = None
+        save_proposals(proposals)
+        return proposal
+
     planning_date = payload.planning_date or date.today()
     occupied = _occupied_blocks_from_approved(proposals, exclude_id=proposal_id)
     plan = plan_task_slot(

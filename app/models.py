@@ -87,6 +87,8 @@ class TaskProposal(BaseModel):
     priority: int = Field(ge=1, le=5)
     duration_minutes: int = Field(gt=0, le=600)
     next_step: str
+    task_group: str | None = None
+    comments: list[str] = Field(default_factory=list)
     planned_start: datetime | None = None
     planned_end: datetime | None = None
     calendar_event_uid: str | None = None
@@ -110,7 +112,7 @@ class ApproveProposalRequest(BaseModel):
     duration_minutes: int | None = Field(default=None, gt=0, le=600)
     priority: int | None = Field(default=None, ge=1, le=5)
     role: str | None = None
-    auto_schedule_to_caldav: bool = True
+    auto_schedule_to_caldav: bool = False
 
 
 class ApproveProposalResponse(BaseModel):
