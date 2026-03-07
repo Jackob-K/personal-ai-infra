@@ -10,13 +10,24 @@ FEEDBACK_PATH = BASE_DIR / "data" / "runtime" / "feedback.json"
 
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
+DOMAIN_RE = re.compile(r"\b([a-z0-9-]+\.)+[a-z]{2,}\b", re.IGNORECASE)
 
 
-def apply_feedback(sender: str | None, role: str, priority: int) -> tuple[str, int]:
+def apply_feedback(sender: str | None, role: str, priority: int, context_text: str = "") -> tuple[str, int]:
     data = _load_feedback()
     sender_key = _sender_key(sender)
     if not sender_key:
         return role, priority
+
+    context_key = _context_key(context_text)
+    if context_key:
+        scoped_key = f"{sender_key}|{context_key}"
+        scoped_role = data.get("sender_context_role", {}).get(scoped_key)
+        scoped_priority = data.get("sender_context_priority", {}).get(scoped_key)
+        if scoped_role:
+            role = scoped_role
+        if isinstance(scoped_priority, int):
+            priority = scoped_priority
 
     learned_role = data.get("sender_role", {}).get(sender_key)
     learned_priority = data.get("sender_priority", {}).get(sender_key)
@@ -27,7 +38,12 @@ def apply_feedback(sender: str | None, role: str, priority: int) -> tuple[str, i
     return role, priority
 
 
-def record_feedback(sender: str | None, role: str | None = None, priority: int | None = None) -> None:
+def record_feedback(
+    sender: str | None,
+    role: str | None = None,
+    priority: int | None = None,
+    context_text: str = "",
+) -> None:
     sender_key = _sender_key(sender)
     if not sender_key:
         return
@@ -35,11 +51,21 @@ def record_feedback(sender: str | None, role: str | None = None, priority: int |
     data = _load_feedback()
     data.setdefault("sender_role", {})
     data.setdefault("sender_priority", {})
+    data.setdefault("sender_context_role", {})
+    data.setdefault("sender_context_priority", {})
 
     if role:
         data["sender_role"][sender_key] = role
     if priority is not None:
         data["sender_priority"][sender_key] = int(priority)
+
+    context_key = _context_key(context_text)
+    if context_key:
+        scoped_key = f"{sender_key}|{context_key}"
+        if role:
+            data["sender_context_role"][scoped_key] = role
+        if priority is not None:
+            data["sender_context_priority"][scoped_key] = int(priority)
 
     _save_feedback(data)
 
@@ -51,11 +77,28 @@ def _sender_key(sender: str | None) -> str:
     return match.group(0).lower() if match else sender.strip().lower()
 
 
+def _context_key(text: str) -> str:
+    if not text:
+        return ""
+    match = DOMAIN_RE.search(text.lower())
+    return match.group(0).lower() if match else ""
+
+
 def _load_feedback() -> dict:
     if not FEEDBACK_PATH.exists():
-        return {"sender_role": {}, "sender_priority": {}}
+        return {
+            "sender_role": {},
+            "sender_priority": {},
+            "sender_context_role": {},
+            "sender_context_priority": {},
+        }
     with FEEDBACK_PATH.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        raw = json.load(f)
+    raw.setdefault("sender_role", {})
+    raw.setdefault("sender_priority", {})
+    raw.setdefault("sender_context_role", {})
+    raw.setdefault("sender_context_priority", {})
+    return raw
 
 
 def _save_feedback(data: dict) -> None:

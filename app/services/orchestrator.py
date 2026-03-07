@@ -205,7 +205,11 @@ def _set_role_command(content: str) -> str:
     proposal.requires_action = True
     proposal.next_step = _next_step_for_role(role, proposal.subject)
     save_proposals(proposals)
-    record_feedback(proposal.sender, role=role)
+    record_feedback(
+        proposal.sender,
+        role=role,
+        context_text=f"{proposal.subject} {proposal.source_excerpt}",
+    )
     return (
         f"Proposal {proposal.id[:8]} má novou roli: {role}. "
         f"Nastavená priorita: {proposal.priority}, odhad: {proposal.duration_minutes} min."
@@ -231,7 +235,11 @@ def _set_priority_command(content: str) -> str:
 
     proposal.priority = priority
     save_proposals(proposals)
-    record_feedback(proposal.sender, priority=priority)
+    record_feedback(
+        proposal.sender,
+        priority=priority,
+        context_text=f"{proposal.subject} {proposal.source_excerpt}",
+    )
     return f"Proposal {proposal.id[:8]} má novou prioritu: {priority}."
 
 

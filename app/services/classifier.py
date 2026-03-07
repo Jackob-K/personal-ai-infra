@@ -53,7 +53,12 @@ def classify_email(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
     else:
         result = _classify_heuristic(payload)
 
-    learned_role, learned_priority = apply_feedback(payload.sender, result.role, result.priority)
+    learned_role, learned_priority = apply_feedback(
+        payload.sender,
+        result.role,
+        result.priority,
+        context_text=f"{payload.subject} {payload.body}",
+    )
     result.role = _normalize_role(learned_role)
     result.priority = max(1, min(5, learned_priority))
 

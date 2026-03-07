@@ -80,6 +80,7 @@ class TaskProposal(BaseModel):
     message_id: str
     sender: str
     subject: str
+    source_excerpt: str = ""
     role: str
     summary: str
     requires_action: bool

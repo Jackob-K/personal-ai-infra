@@ -158,10 +158,18 @@ def triage_update(
         if normalized_role not in allowed_roles:
             return RedirectResponse(url="/triage?msg=Neplatna+role", status_code=303)
         proposal.role = normalized_role
-        record_feedback(proposal.sender, role=proposal.role)
+        record_feedback(
+            proposal.sender,
+            role=proposal.role,
+            context_text=f"{proposal.subject} {proposal.source_excerpt}",
+        )
     if priority is not None:
         proposal.priority = max(1, min(5, int(priority)))
-        record_feedback(proposal.sender, priority=proposal.priority)
+        record_feedback(
+            proposal.sender,
+            priority=proposal.priority,
+            context_text=f"{proposal.subject} {proposal.source_excerpt}",
+        )
     save_proposals(proposals)
 
     if action == "approve":

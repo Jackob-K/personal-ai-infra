@@ -46,6 +46,7 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
                 message_id=message.message_id,
                 sender=message.sender,
                 subject=message.subject,
+                source_excerpt=message.body[:320],
                 role=classified.role,
                 summary=classified.summary,
                 requires_action=classified.requires_action,
