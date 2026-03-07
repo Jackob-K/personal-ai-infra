@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import date
 
 from app.models import ApproveProposalRequest, IngestImapRequest, IngestImapResponse, TaskProposal
@@ -17,6 +18,7 @@ HELP_TEXT = """Dostupné příkazy:
 - triage
 - pending
 - ingest
+- pokracuj
 - set-role <proposal_id> <ROLE>
 - set-priority <proposal_id> <1-5>
 - mark-spam <proposal_id>
@@ -56,6 +58,8 @@ def _handle_orchestrator(content: str) -> str:
         accounts = load_imap_accounts()
         result = ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10))
         return _format_ingest_result(result)
+    if lower in {"pokracuj", "pokračuj", "continue"}:
+        return "Pokračuji dalším krokem. Pro detailní úpravy otevři web triage."
     if lower.startswith("set-role "):
         return _set_role_command(content)
     if lower.startswith("set-priority "):
@@ -274,6 +278,11 @@ def _format_ingest_result(result: IngestImapResponse) -> str:
     else:
         lines.append("")
         lines.append("Žádné čekající návrhy.")
+
+    triage_url = os.getenv("TRIAGE_WEB_URL", "").strip()
+    if triage_url:
+        lines.append("")
+        lines.append(f"Uprav na webu: {triage_url}")
 
     return "\n".join(lines)
 

@@ -39,6 +39,9 @@ Logika:
 ## API endpointy
 - `GET /`
 - `GET /health`
+- `GET /triage` (web triage UI)
+- `POST /triage/update`
+- `POST /triage/continue`
 - `POST /classify-email`
 - `POST /plan-task`
 - `POST /imap/ingest`
@@ -80,6 +83,7 @@ Spouští se 3 služby:
 - `DISCORD_BOT_TOKEN`: token Discord bota
 - `DISCORD_AGENT_CONFIG_PATH`: cesta k runtime mapování kanálů
 - `IMAP_ACCOUNTS_PATH`: cesta k runtime IMAP účtům
+- `TRIAGE_WEB_URL`: odkaz, který orchestrátor po `ingest` připojí do zprávy
 - `CALDAV_*`: Apple/CalDAV integrace
 - `OLLAMA_*`: lokální LLM fallback
 - `GOOGLE_MAPS_API_KEY`: volitelné, pro dynamické travel times
@@ -156,8 +160,15 @@ Poznámka k `ingest`:
 - vypíše počty načtených emailů
 - vypíše nově zachycené návrhy
 - znovu připomene všechny stále čekající návrhy, aby se neztratily v chatu
+- připojí odkaz na web triage (`TRIAGE_WEB_URL`)
 - návrhy můžeš před schválením upravit přes `set-role` a `set-priority`
 - ruční opravy se ukládají jako feedback (učení podle odesílatele)
+
+Web triage:
+- otevři `/triage`
+- uprav roli/prioritu v tabulce
+- `Uložit` nebo `Uložit + Schválit`
+- pokud je vše správně, klikni `Pokračuj` (stejnou větu můžeš napsat i do Discordu)
 
 ## Jak založit Discord bota
 1. Otevři Discord Developer Portal.
