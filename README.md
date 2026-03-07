@@ -13,6 +13,8 @@ Lokální backend pro osobního AI asistenta, který běží primárně na vlast
   - `STARTUP`
   - `SKOLA`
   - `OSOBNI`
+  - `SPAM`
+  - `PHISHING`
 - generování návrhů úkolů se schválením
 - plánování časového slotu
 - zápis do CalDAV kalendáře
@@ -88,6 +90,7 @@ Tyto soubory necommituj:
 - `data/runtime/imap_accounts.json`
 - `data/runtime/proposals.json`
 - `data/runtime/channel_memory.json`
+- `data/runtime/feedback.json`
 
 Ponechaný placeholder v Gitu:
 - `data/runtime/.gitkeep`
@@ -137,8 +140,13 @@ Poznámka:
 ## Discord příkazy
 V kanálu `#orchestrator`:
 - `help`
+- `triage`
 - `pending`
 - `ingest`
+- `set-role <proposal_id> <ROLE>`
+- `set-priority <proposal_id> <1-5>`
+- `mark-spam <proposal_id>`
+- `mark-phishing <proposal_id>`
 - `approve <proposal_id> [YYYY-MM-DD]`
 - `reject <proposal_id>`
 
@@ -148,6 +156,8 @@ Poznámka k `ingest`:
 - vypíše počty načtených emailů
 - vypíše nově zachycené návrhy
 - znovu připomene všechny stále čekající návrhy, aby se neztratily v chatu
+- návrhy můžeš před schválením upravit přes `set-role` a `set-priority`
+- ruční opravy se ukládají jako feedback (učení podle odesílatele)
 
 ## Jak založit Discord bota
 1. Otevři Discord Developer Portal.

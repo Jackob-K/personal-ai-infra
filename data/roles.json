@@ -29,9 +29,14 @@
     "default_duration_minutes": 20,
     "context": "Personal agenda and general life admin."
   },
-  "ASISTENT": {
-    "priority": 4,
-    "default_duration_minutes": 30,
-    "context": "Dedicated block for reviewing and steering AI assistant tasks."
+  "SPAM": {
+    "priority": 1,
+    "default_duration_minutes": 5,
+    "context": "Unwanted email, newsletters, and promotional mail."
+  },
+  "PHISHING": {
+    "priority": 5,
+    "default_duration_minutes": 10,
+    "context": "Potential phishing or security incident requiring verification."
   }
 }

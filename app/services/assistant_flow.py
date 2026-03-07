@@ -32,7 +32,7 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
             )
         )
 
-        if not classified.requires_action:
+        if not classified.requires_action and classified.role not in {"SPAM", "PHISHING"}:
             continue
 
         proposals.append(
@@ -80,6 +80,13 @@ def approve_or_reject_proposal(proposal_id: str, payload: ApproveProposalRequest
         proposal.priority = payload.priority
     if payload.duration_minutes:
         proposal.duration_minutes = payload.duration_minutes
+
+    if proposal.role in {"SPAM", "PHISHING"}:
+        proposal.planned_start = None
+        proposal.planned_end = None
+        proposal.calendar_event_uid = None
+        save_proposals(proposals)
+        return proposal
 
     planning_date = payload.planning_date or date.today()
     occupied = _occupied_blocks_from_approved(proposals, exclude_id=proposal_id)
@@ -131,6 +138,10 @@ def _build_plan_payload(role: str, title: str, duration_minutes: int, planning_d
 
 
 def _make_next_step(role: str, subject: str) -> str:
+    if role == "SPAM":
+        return "Ověř spam a ručně odhlaš subscription nebo nastav blokaci odesílatele."
+    if role == "PHISHING":
+        return "Neotvírej odkazy, ověř odesílatele a případ nahlas jako phishing."
     if role == "PROFESOR":
         return "Navrhni odpověď profesorovi a potvrď nejbližší možný termín."
     if role == "DIPLOMKA":
@@ -141,6 +152,4 @@ def _make_next_step(role: str, subject: str) -> str:
         return "Sepiš 3-bodový akční plán pro startup a pošli follow-up."
     if role == "SKOLA":
         return "Zkontroluj deadline a vlož přípravu do nejbližšího volného bloku."
-    if role == "ASISTENT":
-        return "Zkontroluj návrh asistenta, uprav prioritu a schval plán."
     return f"Navrhni první konkrétní krok k tématu: {subject[:80]}"

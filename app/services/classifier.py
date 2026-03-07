@@ -5,10 +5,21 @@ import os
 from urllib import error, request
 
 from app.models import ClassifyEmailResponse, EmailClassifyRequest
+from app.services.feedback import apply_feedback
 from app.services.roles import load_roles
 
 
 KEYWORD_MAP: list[tuple[str, str]] = [
+    ("unsubscribe", "SPAM"),
+    ("odhlasit", "SPAM"),
+    ("newsletter", "SPAM"),
+    ("vyher", "SPAM"),
+    ("lottery", "SPAM"),
+    ("phishing", "PHISHING"),
+    ("verify your account", "PHISHING"),
+    ("suspicious login", "PHISHING"),
+    ("reset password", "PHISHING"),
+    ("bitcoin", "PHISHING"),
     ("diplom", "DIPLOMKA"),
     ("thesis", "DIPLOMKA"),
     ("profesor", "PROFESOR"),
@@ -19,17 +30,30 @@ KEYWORD_MAP: list[tuple[str, str]] = [
     ("shift", "FIRMA_ZAMESTNANI"),
     ("zkouska", "SKOLA"),
     ("school", "SKOLA"),
-    ("asistent", "ASISTENT"),
-    ("assistant", "ASISTENT"),
 ]
 
 
 def classify_email(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
+    result: ClassifyEmailResponse
     if os.getenv("OLLAMA_ENABLED", "false").lower() == "true":
         llm_result = _classify_via_ollama(payload)
         if llm_result:
-            return llm_result
-    return _classify_heuristic(payload)
+            result = llm_result
+        else:
+            result = _classify_heuristic(payload)
+    else:
+        result = _classify_heuristic(payload)
+
+    learned_role, learned_priority = apply_feedback(payload.sender, result.role, result.priority)
+    result.role = learned_role
+    result.priority = max(1, min(5, learned_priority))
+    if result.role in {"SPAM", "PHISHING"}:
+        result.requires_action = True
+        if result.role == "SPAM":
+            result.suggested_duration_minutes = 5
+        if result.role == "PHISHING":
+            result.suggested_duration_minutes = 10
+    return result
 
 
 def _classify_via_ollama(payload: EmailClassifyRequest) -> ClassifyEmailResponse | None:
@@ -79,6 +103,14 @@ def _classify_heuristic(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
     requires_action = any(token in text for token in ["pros", "urgent", "deadline", "term", "reply", "odpove"])
     priority = 4 if "urgent" in text or "asap" in text else 3 if requires_action else 2
     suggested_duration = 45 if requires_action else 20
+    if role == "SPAM":
+        requires_action = True
+        priority = 1
+        suggested_duration = 5
+    if role == "PHISHING":
+        requires_action = True
+        priority = 5
+        suggested_duration = 10
     summary_source = payload.subject.strip() or payload.body.strip()[:120] or "Email without clear content."
 
     return ClassifyEmailResponse(
