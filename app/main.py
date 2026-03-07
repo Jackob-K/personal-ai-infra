@@ -20,8 +20,11 @@ from app.models import (
     TravelEstimateResponse,
 )
 from app.services.assistant_flow import approve_or_reject_proposal, ingest_and_create_proposals
+from app.services.agent_registry import list_registry_channels
 from app.services.classifier import classify_email
 from app.services.feedback import record_feedback
+from app.services.imap_accounts import load_imap_accounts
+from app.services.orchestrator import update_proposal_status
 from app.services.planner import plan_task_slot
 from app.services.proposal_store import list_proposals, save_proposals
 from app.services.roles import load_roles
@@ -32,8 +35,132 @@ app = FastAPI(title="AI Server", version="0.5.0")
 
 
 @app.get("/")
-def root() -> dict[str, str]:
-    return {"message": "AI Server is running. Open /docs for API documentation."}
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/web", status_code=303)
+
+
+@app.get("/web", response_class=HTMLResponse)
+def web_home() -> HTMLResponse:
+    proposals = list_proposals()
+    counts = {
+        "pending": len([p for p in proposals if p.status == "pending"]),
+        "approved": len([p for p in proposals if p.status == "approved"]),
+        "in_progress": len([p for p in proposals if p.status == "in_progress"]),
+        "dispatched": len([p for p in proposals if p.status == "dispatched"]),
+        "done": len([p for p in proposals if p.status == "done"]),
+    }
+    body = (
+        "<h1>Home</h1>"
+        "<p>Centrální přehled workflow.</p>"
+        f"<p>Pending: <b>{counts['pending']}</b> | Approved: <b>{counts['approved']}</b> | "
+        f"In progress: <b>{counts['in_progress']}</b> | Dispatched: <b>{counts['dispatched']}</b> | "
+        f"Done: <b>{counts['done']}</b></p>"
+        "<ul>"
+        "<li><a href='/triage'>Ingest + Triage</a></li>"
+        "<li><a href='/web/channels'>Jednotlivé kanály</a></li>"
+        "<li><a href='/docs'>API Docs</a></li>"
+        "</ul>"
+    )
+    return HTMLResponse(_page(body, active="home"))
+
+
+@app.get("/web/channels", response_class=HTMLResponse)
+def web_channels() -> HTMLResponse:
+    channels = list_registry_channels()
+    proposals = list_proposals()
+    rows: list[str] = []
+    for channel in channels:
+        role = str(channel.get("role", ""))
+        items = [p for p in proposals if p.role == role and p.status in {"approved", "in_progress", "dispatched"}]
+        channel_name = html.escape(str(channel.get("channel_name", "")))
+        rows.append(
+            "<tr>"
+            f"<td><a href='/web/channel/{channel_name}'>{channel_name}</a></td>"
+            f"<td>{html.escape(role)}</td>"
+            f"<td>{len(items)}</td>"
+            "</tr>"
+        )
+    body = (
+        "<h1>Jednotlivé Kanály</h1>"
+        "<p>Přehled front podle kanálu/role.</p>"
+        "<table border='1' cellpadding='6' cellspacing='0'>"
+        "<thead><tr><th>Kanál</th><th>Role</th><th>Aktivní úkoly</th></tr></thead>"
+        "<tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+    return HTMLResponse(_page(body, active="channels"))
+
+
+@app.get("/web/channel/{channel_name}", response_class=HTMLResponse)
+def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLResponse:
+    channels = list_registry_channels()
+    channel = next((c for c in channels if str(c.get("channel_name", "")).lower() == channel_name.lower()), None)
+    if channel is None:
+        return HTMLResponse(_page(f"<h1>Kanál nenalezen</h1><p>{html.escape(channel_name)}</p>", active="channels"))
+
+    role = str(channel.get("role", "")).upper().strip()
+    items = [p for p in list_proposals() if p.role == role and p.status != "rejected"]
+    notice = f"<p style='color:#0b5'>{html.escape(msg)}</p>" if msg else ""
+
+    rows: list[str] = []
+    for item in items:
+        rows.append(
+            "<tr>"
+            f"<td><code>{html.escape(item.id[:8])}</code></td>"
+            f"<td>{html.escape(item.status)}</td>"
+            f"<td>P{item.priority}</td>"
+            f"<td>{html.escape((item.subject or item.summary or '')[:120])}</td>"
+            "<td>"
+            "<form method='post' action='/web/task-status' style='display:inline'>"
+            f"<input type='hidden' name='proposal_id' value='{html.escape(item.id)}'>"
+            f"<input type='hidden' name='channel_name' value='{html.escape(channel_name)}'>"
+            "<input type='hidden' name='status' value='in_progress'>"
+            "<button type='submit'>Start</button>"
+            "</form> "
+            "<form method='post' action='/web/task-status' style='display:inline'>"
+            f"<input type='hidden' name='proposal_id' value='{html.escape(item.id)}'>"
+            f"<input type='hidden' name='channel_name' value='{html.escape(channel_name)}'>"
+            "<input type='hidden' name='status' value='done'>"
+            "<button type='submit'>Done</button>"
+            "</form>"
+            "</td>"
+            "</tr>"
+        )
+
+    body = (
+        f"<h1>Kanál: {html.escape(channel_name)}</h1>"
+        f"<p>Role: <b>{html.escape(role)}</b></p>"
+        f"{notice}"
+        "<table border='1' cellpadding='6' cellspacing='0'>"
+        "<thead><tr><th>ID</th><th>Stav</th><th>Priorita</th><th>Náhled</th><th>Akce</th></tr></thead>"
+        "<tbody>"
+        + ("".join(rows) if rows else "<tr><td colspan='5'>Žádné položky</td></tr>")
+        + "</tbody></table>"
+    )
+    return HTMLResponse(_page(body, active="channels"))
+
+
+@app.post("/web/task-status")
+async def web_task_status(request: Request) -> RedirectResponse:
+    form = await request.form()
+    proposal_id = str(form.get("proposal_id", "")).strip()
+    channel_name = str(form.get("channel_name", "")).strip()
+    status = str(form.get("status", "")).strip()
+    if status not in {"in_progress", "done"}:
+        return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Neznamy+status", status_code=303)
+    try:
+        update_proposal_status(proposal_id, status)
+    except ValueError:
+        return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Proposal+nenalezen", status_code=303)
+    return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Stav+ulozen", status_code=303)
+
+
+@app.post("/web/ingest")
+def web_ingest() -> RedirectResponse:
+    accounts = load_imap_accounts()
+    ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10))
+    return RedirectResponse(url="/triage?msg=Ingest+hotov", status_code=303)
 
 
 @app.get("/health")
@@ -91,7 +218,7 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
             "<button type='submit' name='action' value='save_all_continue'>Pokračuj</button>"
             "</form>"
         )
-        return HTMLResponse(_page(body))
+        return HTMLResponse(_page(body, active="triage"))
 
     rows: list[str] = []
     for item in pending:
@@ -116,6 +243,7 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
     body = (
         "<h1>Triage Inbox</h1>"
         f"{notice}"
+        "<form method='post' action='/web/ingest'><button type='submit'>Spustit ingest</button></form>"
         "<p>Uprav roli/prioritu a potvrď. SPAM/PHISHING/NEWSLETTER se po schválení neplánují do kalendáře.</p>"
         "<form method='post' action='/triage/submit'>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
@@ -128,7 +256,7 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
         "</p>"
         "</form>"
     )
-    return HTMLResponse(_page(body))
+    return HTMLResponse(_page(body, active="triage"))
 
 
 @app.post("/triage/submit")
@@ -214,13 +342,25 @@ def _role_select_options(roles: list[str], selected: str) -> str:
     return "".join(options)
 
 
-def _page(body: str) -> str:
+def _page(body: str, active: str = "home") -> str:
+    nav = (
+        "<nav style='margin-bottom:14px'>"
+        f"<a href='/web' style='margin-right:12px;{_tab_style(active == 'home')}'>Home</a>"
+        f"<a href='/triage' style='margin-right:12px;{_tab_style(active == 'triage')}'>Ingest + Triage</a>"
+        f"<a href='/web/channels' style='{_tab_style(active == 'channels')}'>Jednotlivé kanály</a>"
+        "</nav>"
+    )
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         "<title>Triage</title>"
         "<style>body{font-family:Arial,sans-serif;margin:20px}table{width:100%}th{text-align:left}</style>"
         "</head><body>"
+        f"{nav}"
         f"{body}"
         "</body></html>"
     )
+
+
+def _tab_style(is_active: bool) -> str:
+    return "font-weight:bold;text-decoration:underline;" if is_active else "text-decoration:none;"

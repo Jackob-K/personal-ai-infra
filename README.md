@@ -39,6 +39,11 @@ Logika:
 
 ## API endpointy
 - `GET /`
+- `GET /web` (home dashboard)
+- `GET /web/channels`
+- `GET /web/channel/{channel_name}`
+- `POST /web/ingest`
+- `POST /web/task-status`
 - `GET /health`
 - `GET /triage` (web triage UI)
 - `POST /triage/submit`
@@ -148,6 +153,9 @@ V kanálu `#orchestrator`:
 - `triage`
 - `pending`
 - `ingest`
+- `dispatch`
+- `start <proposal_id>`
+- `done <proposal_id>`
 - `set-role <proposal_id> <ROLE>`
 - `set-priority <proposal_id> <1-5>`
 - `mark-newsletter <proposal_id>`
@@ -171,6 +179,8 @@ Web triage:
 - uprav roli/prioritu v tabulce (včetně viditelného odesílatele)
 - `Uložit` nebo `Uložit + Schválit`
 - pokud je vše správně, klikni `Pokračuj (uloží vše)` (stejnou větu můžeš napsat i do Discordu)
+- pro přehled používej `/web` a `/web/channels`
+- detail kanálu otevřeš přes `/web/channel/<nazev_kanalu>` (např. `/web/channel/klimatika`), kde můžeš task dát do `in_progress` nebo `done`
 
 ## Jak založit Discord bota
 1. Otevři Discord Developer Portal.

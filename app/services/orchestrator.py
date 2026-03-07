@@ -4,7 +4,7 @@ import os
 from datetime import date
 
 from app.models import ApproveProposalRequest, IngestImapRequest, IngestImapResponse, TaskProposal
-from app.services.agent_registry import find_channel_agent
+from app.services.agent_registry import find_channel_agent, find_role_channel
 from app.services.assistant_flow import approve_or_reject_proposal, ingest_and_create_proposals
 from app.services.channel_memory import append_message, get_recent_messages
 from app.services.feedback import record_feedback
@@ -27,7 +27,10 @@ HELP_TEXT = """Dostupné příkazy:
 - triage
 - pending
 - ingest
+- dispatch
 - pokracuj
+- start <proposal_id>
+- done <proposal_id>
 - set-role <proposal_id> <ROLE>
 - set-priority <proposal_id> <1-5>
 - mark-newsletter <proposal_id>
@@ -58,31 +61,39 @@ def handle_discord_message(channel_name: str, author_name: str, content: str) ->
 
 def _handle_orchestrator(content: str) -> str:
     lower = content.lower()
-    if lower in {"help", "!help"}:
+    cmd = _extract_command(lower)
+
+    if cmd == "help":
         return HELP_TEXT
-    if lower in {"triage", "!triage"}:
+    if cmd == "triage":
         return _format_triage()
-    if lower in {"pending", "!pending"}:
+    if cmd == "pending":
         return _format_pending()
-    if lower in {"ingest", "!ingest"}:
+    if cmd == "ingest":
         accounts = load_imap_accounts()
         result = ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10))
         return _format_ingest_result(result)
-    if lower in {"pokracuj", "pokračuj", "continue"}:
+    if cmd == "dispatch":
+        return _dispatch_hint()
+    if cmd in {"pokracuj", "pokračuj", "continue"}:
         return "Pokračuji dalším krokem. Pro detailní úpravy otevři web triage."
-    if lower.startswith("set-role "):
+    if cmd == "start":
+        return _status_command(content, target_status="in_progress")
+    if cmd == "done":
+        return _status_command(content, target_status="done")
+    if cmd == "set-role":
         return _set_role_command(content)
-    if lower.startswith("set-priority "):
+    if cmd == "set-priority":
         return _set_priority_command(content)
-    if lower.startswith("mark-newsletter "):
+    if cmd == "mark-newsletter":
         return _set_role_shortcut(content, "NEWSLETTER")
-    if lower.startswith("mark-spam "):
+    if cmd == "mark-spam":
         return _set_role_shortcut(content, "SPAM")
-    if lower.startswith("mark-phishing "):
+    if cmd == "mark-phishing":
         return _set_role_shortcut(content, "PHISHING")
-    if lower.startswith("approve "):
+    if cmd == "approve":
         return _approve_command(content)
-    if lower.startswith("reject "):
+    if cmd == "reject":
         return _reject_command(content)
     return HELP_TEXT
 
@@ -148,8 +159,20 @@ def _reject_command(content: str) -> str:
     return f"Návrh {proposal.id} byl odmítnut."
 
 
+def _status_command(content: str, target_status: str) -> str:
+    parts = content.split()
+    if len(parts) < 2:
+        return f"Použití: {'start' if target_status == 'in_progress' else 'done'} <proposal_id>"
+    try:
+        proposal_id = _resolve_proposal_id(parts[1])
+        updated = update_proposal_status(proposal_id, target_status)
+    except ValueError as exc:
+        return str(exc)
+    return f"Proposal {updated.id[:8]} má stav: {updated.status}."
+
+
 def _format_pending(role_filter: str | None = None) -> str:
-    pending = [item for item in list_proposals() if item.status == "pending"]
+    pending = [item for item in list_proposals() if item.status in {"pending", "approved", "in_progress"}]
     if role_filter:
         role_filter = _normalize_role(role_filter)
         pending = [item for item in pending if item.role == role_filter]
@@ -160,7 +183,7 @@ def _format_pending(role_filter: str | None = None) -> str:
 
 
 def _format_triage() -> str:
-    pending = [item for item in list_proposals() if item.status == "pending"]
+    pending = [item for item in list_proposals() if item.status in {"pending", "approved", "in_progress"}]
     if not pending:
         return "Triage fronta je prázdná."
 
@@ -205,6 +228,8 @@ def _set_role_command(content: str) -> str:
         proposal.duration_minutes = max(1, int(role_cfg["default_duration_minutes"]))
     proposal.requires_action = True
     proposal.next_step = _next_step_for_role(role, proposal.subject)
+    if proposal.status in {"dispatched", "done"}:
+        proposal.status = "in_progress"
     save_proposals(proposals)
     record_feedback(
         proposal.sender,
@@ -235,6 +260,8 @@ def _set_priority_command(content: str) -> str:
         return f"Proposal '{proposal_id}' not found"
 
     proposal.priority = priority
+    if proposal.status in {"dispatched", "done"}:
+        proposal.status = "in_progress"
     save_proposals(proposals)
     record_feedback(
         proposal.sender,
@@ -283,7 +310,7 @@ def _resolve_proposal_id(candidate: str) -> str:
 
 
 def _format_ingest_result(result: IngestImapResponse) -> str:
-    pending = [item for item in list_proposals() if item.status == "pending"]
+    pending = [item for item in list_proposals() if item.status in {"pending", "approved", "in_progress"}]
     new_items = [item for item in result.proposals if item.id in set(result.new_proposal_ids)]
     lines = [
         "IMAP ingest hotov.",
@@ -348,3 +375,51 @@ def _next_step_for_role(role: str, subject: str) -> str:
 def _normalize_role(role: str) -> str:
     normalized = role.upper().strip()
     return ROLE_ALIASES.get(normalized, normalized)
+
+
+def _extract_command(content_lower: str) -> str:
+    text = content_lower.strip()
+    if not text:
+        return ""
+    return text.split()[0].lstrip("!/")
+
+
+def get_dispatch_candidates() -> list[TaskProposal]:
+    return [item for item in list_proposals() if item.status == "approved"]
+
+
+def dispatch_grouped_by_channel() -> dict[str, list[TaskProposal]]:
+    grouped: dict[str, list[TaskProposal]] = {}
+    for item in get_dispatch_candidates():
+        channel = find_role_channel(item.role) or "orchestrator"
+        grouped.setdefault(channel, []).append(item)
+    return grouped
+
+
+def mark_dispatched(proposal_ids: list[str]) -> None:
+    proposals = list_proposals()
+    target = set(proposal_ids)
+    changed = False
+    for item in proposals:
+        if item.id in target and item.status == "approved":
+            item.status = "dispatched"
+            changed = True
+    if changed:
+        save_proposals(proposals)
+
+
+def update_proposal_status(proposal_id: str, status: str) -> TaskProposal:
+    proposals = list_proposals()
+    proposal = next((item for item in proposals if item.id == proposal_id), None)
+    if proposal is None:
+        raise ValueError(f"Proposal '{proposal_id}' not found")
+    proposal.status = status
+    save_proposals(proposals)
+    return proposal
+
+
+def _dispatch_hint() -> str:
+    count = len(get_dispatch_candidates())
+    if count == 0:
+        return "Není co dispatchovat. Schval nejdřív položky přes approve / web triage."
+    return f"Připraveno k dispatch: {count}. Bot je po příkazu rozešle do kanálů."

@@ -24,3 +24,16 @@ def find_channel_agent(channel_name: str) -> dict[str, Any] | None:
         if channel.get("channel_name", "").lower() == channel_name.lower():
             return channel
     return None
+
+
+def find_role_channel(role: str) -> str | None:
+    target = role.upper().strip()
+    registry = load_agent_registry()
+    for channel in registry.get("channels", []):
+        if str(channel.get("role", "")).upper().strip() == target:
+            return channel.get("channel_name")
+    return None
+
+
+def list_registry_channels() -> list[dict[str, Any]]:
+    return list(load_agent_registry().get("channels", []))

@@ -75,7 +75,7 @@ class RawEmailMessage(BaseModel):
 class TaskProposal(BaseModel):
     id: str
     created_at: datetime
-    status: Literal["pending", "approved", "rejected"] = "pending"
+    status: Literal["pending", "approved", "in_progress", "dispatched", "done", "rejected"] = "pending"
     account_name: str
     message_id: str
     sender: str
