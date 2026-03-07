@@ -253,6 +253,8 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
         + "</tbody></table>"
         "<p style='margin-top:14px'>"
         "<button type='submit' name='action' value='save_all_continue'>Pokračuj (uloží vše)</button>"
+        " "
+        "<button type='submit' name='action' value='save_all_approve'>Uložit + Schválit vše</button>"
         "</p>"
         "</form>"
     )
@@ -272,6 +274,17 @@ async def triage_submit(request: Request) -> RedirectResponse:
             _apply_row_changes(form, proposal, allowed_roles)
         save_proposals(proposals)
         return RedirectResponse(url="/triage?msg=Vse+ulozeno,+pokracuj", status_code=303)
+
+    if action == "save_all_approve":
+        pending = [item for item in proposals if item.status == "pending"]
+        for proposal in pending:
+            ok, error = _apply_row_changes(form, proposal, allowed_roles)
+            if not ok:
+                return RedirectResponse(url=f"/triage?msg={error}", status_code=303)
+        save_proposals(proposals)
+        for proposal in pending:
+            approve_or_reject_proposal(proposal.id, ApproveProposalRequest(approve=True, planning_date=date.today()))
+        return RedirectResponse(url="/triage?msg=Vse+ulozeno+a+schvaleno", status_code=303)
 
     if ":" not in action:
         return RedirectResponse(url="/triage?msg=Neznamy+action", status_code=303)

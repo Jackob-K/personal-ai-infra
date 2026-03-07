@@ -179,6 +179,7 @@ Web triage:
 - uprav roli/prioritu v tabulce (včetně viditelného odesílatele)
 - `Uložit` nebo `Uložit + Schválit`
 - pokud je vše správně, klikni `Pokračuj (uloží vše)` (stejnou větu můžeš napsat i do Discordu)
+- když máš vše připravené najednou, použij `Uložit + Schválit vše`
 - pro přehled používej `/web` a `/web/channels`
 - detail kanálu otevřeš přes `/web/channel/<nazev_kanalu>` (např. `/web/channel/klimatika`), kde můžeš task dát do `in_progress` nebo `done`
 
