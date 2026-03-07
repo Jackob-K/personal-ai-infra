@@ -5,7 +5,7 @@
     {"channel_name": "diplomka", "agent": "DIPLOMKA", "role": "DIPLOMKA"},
     {"channel_name": "profesor", "agent": "PROFESOR", "role": "PROFESOR"},
     {"channel_name": "firma", "agent": "FIRMA_ZAMESTNANI", "role": "FIRMA_ZAMESTNANI"},
-    {"channel_name": "startup", "agent": "STARTUP", "role": "STARTUP"},
+    {"channel_name": "tokveko", "agent": "TOKVEKO", "role": "TOKVEKO"},
     {"channel_name": "skola", "agent": "SKOLA", "role": "SKOLA"},
     {"channel_name": "osobni", "agent": "OSOBNI", "role": "OSOBNI"}
   ]

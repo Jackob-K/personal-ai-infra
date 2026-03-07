@@ -150,13 +150,14 @@ def _format_triage() -> str:
     if not pending:
         return "Triage fronta je prázdná."
 
-    header = "ID       | ROLE             | P | Náhled"
+    header = "ID       | ROLE             | P | Odesílatel                   | Náhled"
     rows = [header, "-" * len(header)]
     for item in pending[:15]:
         short_id = item.id[:8]
         role = item.role[:16].ljust(16)
+        sender = (item.sender or "").replace("\n", " ").strip()[:28].ljust(28)
         preview = (item.subject or item.summary).replace("\n", " ").strip()[:70]
-        rows.append(f"{short_id} | {role} | {item.priority} | {preview}")
+        rows.append(f"{short_id} | {role} | {item.priority} | {sender} | {preview}")
     if len(pending) > 15:
         rows.append(f"... a dalších {len(pending) - 15} položek.")
 
@@ -231,7 +232,7 @@ def _role_prefix(role: str) -> str:
         "DIPLOMKA": "Agent DIPLOMKA sleduje thesis práci, termíny a výstupy.",
         "PROFESOR": "Agent PROFESOR řeší akademickou komunikaci a odpovědi.",
         "FIRMA_ZAMESTNANI": "Agent FIRMA_ZAMESTNANI řeší směny, práci a navazující bloky.",
-        "STARTUP": "Agent STARTUP řeší startup operativu a follow-upy.",
+        "TOKVEKO": "Agent TOKVEKO řeší operativu a follow-upy firmy TOKVEKO.",
         "SKOLA": "Agent SKOLA řeší studijní administrativu a přípravu.",
         "OSOBNI": "Agent OSOBNI řeší osobní agendu.",
         "SPAM": "Agent SPAM řeší nevyžádané zprávy a subscriptions.",
@@ -290,7 +291,9 @@ def _format_ingest_result(result: IngestImapResponse) -> str:
 def _proposal_lines(items: list[TaskProposal]) -> list[str]:
     lines: list[str] = []
     for item in items:
-        lines.append(f"- {item.id[:8]} | {item.role} | P{item.priority} | {item.subject or item.summary}")
+        lines.append(
+            f"- {item.id[:8]} | {item.role} | P{item.priority} | {item.sender} | {item.subject or item.summary}"
+        )
     return lines
 
 
@@ -305,8 +308,8 @@ def _next_step_for_role(role: str, subject: str) -> str:
         return "Rozděl úkol diplomky na 1 konkrétní 60min blok a připrav první odstavec/outline."
     if role == "FIRMA_ZAMESTNANI":
         return "Potvrď směnu nebo pracovní požadavek a zapiš návazný blok v kalendáři."
-    if role == "STARTUP":
-        return "Sepiš 3-bodový akční plán pro startup a pošli follow-up."
+    if role == "TOKVEKO":
+        return "Sepiš 3-bodový akční plán pro TOKVEKO a pošli follow-up."
     if role == "SKOLA":
         return "Zkontroluj deadline a vlož přípravu do nejbližšího volného bloku."
     return f"Navrhni první konkrétní krok k tématu: {subject[:80]}"

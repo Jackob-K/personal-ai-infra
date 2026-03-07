@@ -10,7 +10,7 @@ Lokální backend pro osobního AI asistenta, který běží primárně na vlast
   - `DIPLOMKA`
   - `PROFESOR`
   - `FIRMA_ZAMESTNANI`
-  - `STARTUP`
+  - `TOKVEKO`
   - `SKOLA`
   - `OSOBNI`
   - `SPAM`
@@ -26,7 +26,7 @@ Doporučené kanály na Discord serveru:
 - `#diplomka`
 - `#profesor`
 - `#firma`
-- `#startup`
+- `#tokveko`
 - `#skola`
 - `#osobni`
 
@@ -166,7 +166,7 @@ Poznámka k `ingest`:
 
 Web triage:
 - otevři `/triage`
-- uprav roli/prioritu v tabulce
+- uprav roli/prioritu v tabulce (včetně viditelného odesílatele)
 - `Uložit` nebo `Uložit + Schválit`
 - pokud je vše správně, klikni `Pokračuj` (stejnou větu můžeš napsat i do Discordu)
 
@@ -186,7 +186,7 @@ Web triage:
 
 ## První praktický setup
 1. Založ soukromý Discord server.
-2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `firma`, `startup`, `skola`, `osobni`.
+2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `firma`, `tokveko`, `skola`, `osobni`.
 3. Zkopíruj `data/discord_agents.example.json` do `data/runtime/discord_agents.json`.
 4. Uprav názvy kanálů, pokud se liší.
 5. Zkopíruj `data/imap_accounts.example.json` do `data/runtime/imap_accounts.json`.

@@ -97,9 +97,11 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
     editable_rows: list[str] = []
     for item in pending:
         escaped_subject = html.escape((item.subject or item.summary or "")[:120])
+        escaped_sender = html.escape((item.sender or "")[:120])
         editable_rows.append(
             "<tr>"
             f"<td><code>{html.escape(item.id[:8])}</code></td>"
+            f"<td>{escaped_sender}</td>"
             f"<td>{html.escape(item.role)}</td>"
             f"<td>{item.priority}</td>"
             f"<td>{escaped_subject}</td>"
@@ -121,7 +123,7 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
         f"{notice}"
         "<p>Uprav roli/prioritu a potvrď. SPAM/PHISHING se po schválení neplánují do kalendáře.</p>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
-        "<thead><tr><th>ID</th><th>Role</th><th>P</th><th>Náhled</th><th>Akce</th></tr></thead>"
+        "<thead><tr><th>ID</th><th>Odesílatel</th><th>Role</th><th>P</th><th>Náhled</th><th>Akce</th></tr></thead>"
         "<tbody>"
         + "".join(editable_rows)
         + "</tbody></table>"

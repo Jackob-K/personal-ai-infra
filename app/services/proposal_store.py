@@ -15,6 +15,9 @@ def list_proposals() -> list[TaskProposal]:
         return []
     with PROPOSALS_PATH.open("r", encoding="utf-8") as f:
         raw = json.load(f)
+    for item in raw:
+        if item.get("role") == "STARTUP":
+            item["role"] = "TOKVEKO"
     return [TaskProposal(**item) for item in raw]
 
 

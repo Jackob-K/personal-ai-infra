@@ -14,10 +14,10 @@
     "default_duration_minutes": 0,
     "context": "Employment role with scheduled shifts and commute buffers."
   },
-  "STARTUP": {
+  "TOKVEKO": {
     "priority": 3,
     "default_duration_minutes": 45,
-    "context": "Startup operations, invoices, product tasks."
+    "context": "TOKVEKO operations, invoices, product tasks."
   },
   "SKOLA": {
     "priority": 3,

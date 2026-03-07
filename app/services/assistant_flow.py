@@ -148,8 +148,8 @@ def _make_next_step(role: str, subject: str) -> str:
         return "Rozděl úkol diplomky na 1 konkrétní 60min blok a připrav první odstavec/outline."
     if role == "FIRMA_ZAMESTNANI":
         return "Potvrď směnu nebo pracovní požadavek a zapiš návazný blok v kalendáři."
-    if role == "STARTUP":
-        return "Sepiš 3-bodový akční plán pro startup a pošli follow-up."
+    if role == "TOKVEKO":
+        return "Sepiš 3-bodový akční plán pro TOKVEKO a pošli follow-up."
     if role == "SKOLA":
         return "Zkontroluj deadline a vlož přípravu do nejbližšího volného bloku."
     return f"Navrhni první konkrétní krok k tématu: {subject[:80]}"
