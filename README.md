@@ -9,7 +9,7 @@ Lokální backend pro osobního AI asistenta, který běží primárně na vlast
 - klasifikaci emailů do rolí:
   - `DIPLOMKA`
   - `PROFESOR`
-  - `FIRMA_ZAMESTNANI`
+  - `KLIMATIKA`
   - `TOKVEKO`
   - `UNIVERZITA`
   - `OSOBNI`
@@ -26,7 +26,7 @@ Doporučené kanály na Discord serveru:
 - `#orchestrator`
 - `#diplomka`
 - `#profesor`
-- `#firma`
+- `#klimatika`
 - `#tokveko`
 - `#univerzita`
 - `#osobni`
@@ -41,7 +41,7 @@ Logika:
 - `GET /`
 - `GET /health`
 - `GET /triage` (web triage UI)
-- `POST /triage/update`
+- `POST /triage/submit`
 - `POST /triage/continue`
 - `POST /classify-email`
 - `POST /plan-task`
@@ -170,7 +170,7 @@ Web triage:
 - otevři `/triage`
 - uprav roli/prioritu v tabulce (včetně viditelného odesílatele)
 - `Uložit` nebo `Uložit + Schválit`
-- pokud je vše správně, klikni `Pokračuj` (stejnou větu můžeš napsat i do Discordu)
+- pokud je vše správně, klikni `Pokračuj (uloží vše)` (stejnou větu můžeš napsat i do Discordu)
 
 ## Jak založit Discord bota
 1. Otevři Discord Developer Portal.
@@ -188,7 +188,7 @@ Web triage:
 
 ## První praktický setup
 1. Založ soukromý Discord server.
-2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `firma`, `tokveko`, `univerzita`, `osobni`.
+2. Vytvoř kanály `orchestrator`, `diplomka`, `profesor`, `klimatika`, `tokveko`, `univerzita`, `osobni`.
 3. Zkopíruj `data/discord_agents.example.json` do `data/runtime/discord_agents.json`.
 4. Uprav názvy kanálů, pokud se liší.
 5. Zkopíruj `data/imap_accounts.example.json` do `data/runtime/imap_accounts.json`.

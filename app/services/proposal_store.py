@@ -12,6 +12,7 @@ PROPOSALS_PATH = BASE_DIR / "data" / "runtime" / "proposals.json"
 ROLE_ALIASES = {
     "STARTUP": "TOKVEKO",
     "SKOLA": "UNIVERZITA",
+    "FIRMA_ZAMESTNANI": "KLIMATIKA",
 }
 
 

@@ -16,6 +16,7 @@ from app.services.roles import load_roles
 ROLE_ALIASES = {
     "STARTUP": "TOKVEKO",
     "SKOLA": "UNIVERZITA",
+    "FIRMA_ZAMESTNANI": "KLIMATIKA",
 }
 
 NON_CALENDAR_ROLES = {"SPAM", "PHISHING", "NEWSLETTER"}
@@ -256,7 +257,7 @@ def _role_prefix(role: str) -> str:
     mapping = {
         "DIPLOMKA": "Agent DIPLOMKA sleduje thesis práci, termíny a výstupy.",
         "PROFESOR": "Agent PROFESOR řeší akademickou komunikaci a odpovědi.",
-        "FIRMA_ZAMESTNANI": "Agent FIRMA_ZAMESTNANI řeší směny, práci a navazující bloky.",
+        "KLIMATIKA": "Agent KLIMATIKA řeší směny, práci a navazující bloky.",
         "TOKVEKO": "Agent TOKVEKO řeší operativu a follow-upy firmy TOKVEKO.",
         "UNIVERZITA": "Agent UNIVERZITA řeší studijní administrativu a přípravu.",
         "OSOBNI": "Agent OSOBNI řeší osobní agendu.",
@@ -335,7 +336,7 @@ def _next_step_for_role(role: str, subject: str) -> str:
         return "Navrhni odpověď profesorovi a potvrď nejbližší možný termín."
     if role == "DIPLOMKA":
         return "Rozděl úkol diplomky na 1 konkrétní 60min blok a připrav první odstavec/outline."
-    if role == "FIRMA_ZAMESTNANI":
+    if role == "KLIMATIKA":
         return "Potvrď směnu nebo pracovní požadavek a zapiš návazný blok v kalendáři."
     if role == "TOKVEKO":
         return "Sepiš 3-bodový akční plán pro TOKVEKO a pošli follow-up."

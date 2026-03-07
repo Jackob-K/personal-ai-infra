@@ -9,10 +9,10 @@
     "default_duration_minutes": 30,
     "context": "Academic communication and student-related messages."
   },
-  "FIRMA_ZAMESTNANI": {
+  "KLIMATIKA": {
     "priority": 5,
     "default_duration_minutes": 0,
-    "context": "Employment role with scheduled shifts and commute buffers."
+    "context": "Klimatika work role with shifts, tasks, and commute buffers."
   },
   "TOKVEKO": {
     "priority": 3,

@@ -6,7 +6,7 @@
   "fixed_block_rules": [
     {
       "label": "Morning job shift",
-      "role": "FIRMA_ZAMESTNANI",
+      "role": "KLIMATIKA",
       "days": ["mon", "wed", "fri"],
       "start": "05:30",
       "end": "14:00",
@@ -31,4 +31,3 @@
     "mode": "transit"
   }
 }
-

@@ -28,8 +28,9 @@ KEYWORD_MAP: list[tuple[str, str]] = [
     ("faktura", "TOKVEKO"),
     ("startup", "TOKVEKO"),
     ("tokveko", "TOKVEKO"),
-    ("smena", "FIRMA_ZAMESTNANI"),
-    ("shift", "FIRMA_ZAMESTNANI"),
+    ("smena", "KLIMATIKA"),
+    ("shift", "KLIMATIKA"),
+    ("klimatika", "KLIMATIKA"),
     ("zkouska", "UNIVERZITA"),
     ("school", "UNIVERZITA"),
     ("univerzita", "UNIVERZITA"),
@@ -39,6 +40,7 @@ KEYWORD_MAP: list[tuple[str, str]] = [
 ROLE_ALIASES = {
     "STARTUP": "TOKVEKO",
     "SKOLA": "UNIVERZITA",
+    "FIRMA_ZAMESTNANI": "KLIMATIKA",
 }
 
 

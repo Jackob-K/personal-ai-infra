@@ -3,8 +3,7 @@ from __future__ import annotations
 import html
 from datetime import date
 
-from fastapi import FastAPI, HTTPException
-from fastapi import Form
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.models import (
@@ -21,8 +20,8 @@ from app.models import (
     TravelEstimateResponse,
 )
 from app.services.assistant_flow import approve_or_reject_proposal, ingest_and_create_proposals
-from app.services.feedback import record_feedback
 from app.services.classifier import classify_email
+from app.services.feedback import record_feedback
 from app.services.planner import plan_task_slot
 from app.services.proposal_store import list_proposals, save_proposals
 from app.services.roles import load_roles
@@ -88,32 +87,28 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
             "<h1>Triage Inbox</h1>"
             f"{notice}"
             "<p>Žádné čekající položky. Napiš v Discordu do orchestratora <code>pokracuj</code>.</p>"
-            "<form method='post' action='/triage/continue'>"
-            "<button type='submit'>Pokračuj</button>"
+            "<form method='post' action='/triage/submit'>"
+            "<button type='submit' name='action' value='save_all_continue'>Pokračuj</button>"
             "</form>"
         )
         return HTMLResponse(_page(body))
 
-    editable_rows: list[str] = []
+    rows: list[str] = []
     for item in pending:
         escaped_subject = html.escape((item.subject or item.summary or "")[:120])
         escaped_sender = html.escape((item.sender or "")[:120])
-        editable_rows.append(
+        escaped_id = html.escape(item.id)
+        rows.append(
             "<tr>"
             f"<td><code>{html.escape(item.id[:8])}</code></td>"
             f"<td>{escaped_sender}</td>"
-            f"<td>{html.escape(item.role)}</td>"
-            f"<td>{item.priority}</td>"
+            f"<td><select name='role__{escaped_id}'>{_role_select_options(roles, item.role)}</select></td>"
+            f"<td><input name='priority__{escaped_id}' type='number' min='1' max='5' value='{item.priority}' style='width:56px'></td>"
             f"<td>{escaped_subject}</td>"
             "<td>"
-            "<form method='post' action='/triage/update'>"
-            f"<input type='hidden' name='proposal_id' value='{html.escape(item.id)}'>"
-            f"<select name='role'>{_role_select_options(roles, item.role)}</select> "
-            f"<input name='priority' type='number' min='1' max='5' value='{item.priority}' style='width:56px'> "
-            "<button name='action' value='save'>Uložit</button> "
-            "<button name='action' value='approve'>Uložit + Schválit</button> "
-            "<button name='action' value='reject'>Odmítnout</button>"
-            "</form>"
+            f"<button type='submit' name='action' value='save:{escaped_id}'>Uložit</button> "
+            f"<button type='submit' name='action' value='approve:{escaped_id}'>Uložit + Schválit</button> "
+            f"<button type='submit' name='action' value='reject:{escaped_id}'>Odmítnout</button>"
             "</td>"
             "</tr>"
         )
@@ -122,57 +117,52 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
         "<h1>Triage Inbox</h1>"
         f"{notice}"
         "<p>Uprav roli/prioritu a potvrď. SPAM/PHISHING/NEWSLETTER se po schválení neplánují do kalendáře.</p>"
+        "<form method='post' action='/triage/submit'>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
         "<thead><tr><th>ID</th><th>Odesílatel</th><th>Role</th><th>P</th><th>Náhled</th><th>Akce</th></tr></thead>"
         "<tbody>"
-        + "".join(editable_rows)
+        + "".join(rows)
         + "</tbody></table>"
         "<p style='margin-top:14px'>"
-        "<form method='post' action='/triage/continue'>"
-        "<button type='submit'>Pokračuj</button>"
-        "</form>"
+        "<button type='submit' name='action' value='save_all_continue'>Pokračuj (uloží vše)</button>"
         "</p>"
+        "</form>"
     )
     return HTMLResponse(_page(body))
 
 
-@app.post("/triage/update")
-def triage_update(
-    proposal_id: str = Form(...),
-    role: str | None = Form(None),
-    priority: int | None = Form(None),
-    action: str = Form("save"),
-) -> RedirectResponse:
+@app.post("/triage/submit")
+async def triage_submit(request: Request) -> RedirectResponse:
+    form = await request.form()
+    action = str(form.get("action", "")).strip()
     proposals = list_proposals()
+    allowed_roles = set(load_roles().keys())
+
+    if action == "save_all_continue":
+        pending = [item for item in proposals if item.status == "pending"]
+        for proposal in pending:
+            _apply_row_changes(form, proposal, allowed_roles)
+        save_proposals(proposals)
+        return RedirectResponse(url="/triage?msg=Vse+ulozeno,+pokracuj", status_code=303)
+
+    if ":" not in action:
+        return RedirectResponse(url="/triage?msg=Neznamy+action", status_code=303)
+
+    verb, proposal_id = action.split(":", 1)
     proposal = _find_proposal_by_id_prefix(proposals, proposal_id)
     if proposal is None:
         return RedirectResponse(url="/triage?msg=Proposal+nenalezen", status_code=303)
 
-    if action == "reject":
+    if verb == "reject":
         approve_or_reject_proposal(proposal.id, ApproveProposalRequest(approve=False, auto_schedule_to_caldav=False))
         return RedirectResponse(url="/triage?msg=Polozka+odmitnuta", status_code=303)
 
-    allowed_roles = set(load_roles().keys())
-    if role:
-        normalized_role = role.upper()
-        if normalized_role not in allowed_roles:
-            return RedirectResponse(url="/triage?msg=Neplatna+role", status_code=303)
-        proposal.role = normalized_role
-        record_feedback(
-            proposal.sender,
-            role=proposal.role,
-            context_text=f"{proposal.subject} {proposal.source_excerpt}",
-        )
-    if priority is not None:
-        proposal.priority = max(1, min(5, int(priority)))
-        record_feedback(
-            proposal.sender,
-            priority=proposal.priority,
-            context_text=f"{proposal.subject} {proposal.source_excerpt}",
-        )
+    ok, error = _apply_row_changes(form, proposal, allowed_roles)
+    if not ok:
+        return RedirectResponse(url=f"/triage?msg={error}", status_code=303)
     save_proposals(proposals)
 
-    if action == "approve":
+    if verb == "approve":
         approve_or_reject_proposal(proposal.id, ApproveProposalRequest(approve=True, planning_date=date.today()))
         return RedirectResponse(url="/triage?msg=Polozka+schvalena", status_code=303)
 
@@ -182,6 +172,28 @@ def triage_update(
 @app.post("/triage/continue")
 def triage_continue() -> RedirectResponse:
     return RedirectResponse(url="/triage?msg=Pokracuj+-+kategorizace+je+hotova", status_code=303)
+
+
+def _apply_row_changes(form, proposal, allowed_roles: set[str]) -> tuple[bool, str]:
+    role_raw = str(form.get(f"role__{proposal.id}", proposal.role)).upper().strip()
+    if role_raw not in allowed_roles:
+        return False, "Neplatna+role"
+
+    priority_raw = form.get(f"priority__{proposal.id}", proposal.priority)
+    try:
+        priority = int(priority_raw)
+    except (TypeError, ValueError):
+        return False, "Neplatna+priorita"
+
+    proposal.role = role_raw
+    proposal.priority = max(1, min(5, priority))
+    record_feedback(
+        proposal.sender,
+        role=proposal.role,
+        priority=proposal.priority,
+        context_text=f"{proposal.subject} {proposal.source_excerpt}",
+    )
+    return True, "ok"
 
 
 def _find_proposal_by_id_prefix(proposals, candidate: str):
