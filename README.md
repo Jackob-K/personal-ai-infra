@@ -186,7 +186,8 @@ Web triage:
 - když máš vše připravené najednou, použij `Uložit + Schválit vše`
 - pro přehled používej `/web` a `/web/channels`
 - detail kanálu otevřeš přes `/web/channel/<nazev_kanalu>` (např. `/web/channel/klimatika`)
-- v detailu kanálu můžeš doplnit `Skupinu` (větší úkol), přidat `Komentář` a změnit stav na `Rozpracováno/Hotovo`
+- v detailu kanálu vidíš i `Odesílatele`
+- v detailu kanálu můžeš změnit i `Role` (tím položku přesuneš do jiného kanálu), doplnit `Skupinu` (větší úkol), přidat `Komentář` a změnit stav na `Rozpracováno/Hotovo`
 
 ## Aktuální pipeline (manuální kalendář)
 1. `ingest` načte emaily a připraví návrhy.

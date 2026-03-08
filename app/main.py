@@ -101,6 +101,7 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
 
     role = str(channel.get("role", "")).upper().strip()
     items = [p for p in list_proposals() if p.role == role and p.status != "rejected"]
+    roles = sorted(load_roles().keys()) + ["NEWSLETTER", "SPAM", "PHISHING"]
     notice = f"<p style='color:#0b5'>{html.escape(msg)}</p>" if msg else ""
 
     rows: list[str] = []
@@ -110,6 +111,8 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
             f"<td><code>{html.escape(item.id[:8])}</code></td>"
             f"<td>{html.escape(item.status)}</td>"
             f"<td>P{item.priority}</td>"
+            f"<td>{html.escape(item.sender or '')}</td>"
+            f"<td>{html.escape(item.role)}</td>"
             f"<td>{html.escape(item.task_group or '')}</td>"
             f"<td>{html.escape((item.subject or item.summary or '')[:120])}</td>"
             f"<td>{html.escape(item.comments[-1] if item.comments else '')}</td>"
@@ -117,6 +120,7 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
             "<form method='post' action='/web/task-update' style='display:inline'>"
             f"<input type='hidden' name='proposal_id' value='{html.escape(item.id)}'>"
             f"<input type='hidden' name='channel_name' value='{html.escape(channel_name)}'>"
+            f"<select name='role'>{_role_select_options(roles, item.role)}</select> "
             f"<input type='text' name='task_group' placeholder='Skupina' value='{html.escape(item.task_group or '')}' style='width:140px'> "
             "<input type='text' name='comment' placeholder='Komentář' style='width:220px'> "
             "<select name='status'>"
@@ -135,9 +139,9 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
         f"<p>Role: <b>{html.escape(role)}</b></p>"
         f"{notice}"
         "<table border='1' cellpadding='6' cellspacing='0'>"
-        "<thead><tr><th>ID</th><th>Stav</th><th>Priorita</th><th>Skupina</th><th>Náhled</th><th>Poslední komentář</th><th>Akce</th></tr></thead>"
+        "<thead><tr><th>ID</th><th>Stav</th><th>Priorita</th><th>Odesílatel</th><th>Role</th><th>Skupina</th><th>Náhled</th><th>Poslední komentář</th><th>Akce</th></tr></thead>"
         "<tbody>"
-        + ("".join(rows) if rows else "<tr><td colspan='7'>Žádné položky</td></tr>")
+        + ("".join(rows) if rows else "<tr><td colspan='9'>Žádné položky</td></tr>")
         + "</tbody></table>"
     )
     return HTMLResponse(_page(body, active="channels"))
@@ -149,14 +153,20 @@ async def web_task_update(request: Request) -> RedirectResponse:
     proposal_id = str(form.get("proposal_id", "")).strip()
     channel_name = str(form.get("channel_name", "")).strip()
     status = str(form.get("status", "keep")).strip()
+    role = str(form.get("role", "")).strip().upper()
     task_group = str(form.get("task_group", "")).strip()
     comment = str(form.get("comment", "")).strip()
+    allowed_roles = set(load_roles().keys()) | {"NEWSLETTER", "SPAM", "PHISHING"}
 
     proposals = list_proposals()
     proposal = _find_proposal_by_id_prefix(proposals, proposal_id)
     if proposal is None:
         return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Proposal+nenalezen", status_code=303)
 
+    if role:
+        if role not in allowed_roles:
+            return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Neplatna+role", status_code=303)
+        proposal.role = role
     if task_group:
         proposal.task_group = task_group[:120]
     if comment:
