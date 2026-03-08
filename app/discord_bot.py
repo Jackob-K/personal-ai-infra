@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 
 import discord
 
@@ -60,11 +61,20 @@ async def _dispatch_to_channels(message: discord.Message) -> None:
             continue
 
         lines = ["Nové úkoly k řešení:"]
-        for item in proposals[:20]:
+        grouped_bundles: dict[str, list] = defaultdict(list)
+        for item in proposals:
+            key = item.bundle_key or item.id
+            grouped_bundles[key].append(item)
+
+        bundle_items = list(grouped_bundles.values())[:20]
+        for bucket in bundle_items:
+            item = bucket[0]
+            count = len(bucket)
+            bundle = item.bundle_label or item.bundle_key or "bez-bundle"
             lines.append(
-                f"- `{item.id[:8]}` | {item.role} | P{item.priority} | {item.sender} | {item.subject or item.summary}"
+                f"- `{item.id[:8]}` | {item.role} | P{item.priority} | {item.sender} | {bundle} | zpráv: {count}"
             )
-            sent_ids.append(item.id)
+            sent_ids.extend([p.id for p in bucket])
 
         await target.send("\n".join(lines))
         sent_channels += 1

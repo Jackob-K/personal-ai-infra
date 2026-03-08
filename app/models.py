@@ -82,11 +82,16 @@ class TaskProposal(BaseModel):
     subject: str
     source_excerpt: str = ""
     role: str
+    handling: Literal["review", "process", "needs_attention", "calendar"] = "review"
     summary: str
     requires_action: bool
     priority: int = Field(ge=1, le=5)
     duration_minutes: int = Field(gt=0, le=600)
     next_step: str
+    bundle_key: str | None = None
+    bundle_label: str | None = None
+    project_id: str | None = None
+    subtask_id: str | None = None
     task_group: str | None = None
     comments: list[str] = Field(default_factory=list)
     planned_start: datetime | None = None
@@ -131,3 +136,22 @@ class TravelEstimateResponse(BaseModel):
     duration_minutes: int
     status: str
     detail: str | None = None
+
+
+class ProjectSubtask(BaseModel):
+    id: str
+    title: str
+    status: Literal["todo", "in_progress", "done"] = "todo"
+    priority: int = Field(default=3, ge=1, le=5)
+    notes: list[str] = Field(default_factory=list)
+
+
+class ProjectItem(BaseModel):
+    id: str
+    name: str
+    role: str
+    status: Literal["open", "blocked", "waiting", "done"] = "open"
+    deadline: date | None = None
+    created_at: datetime
+    notes: list[str] = Field(default_factory=list)
+    subtasks: list[ProjectSubtask] = Field(default_factory=list)

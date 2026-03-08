@@ -42,6 +42,9 @@ Logika:
 - `GET /web` (home dashboard)
 - `GET /web/channels`
 - `GET /web/channel/{channel_name}`
+- `GET /web/projects`
+- `GET /web/project/{project_id}`
+- `POST /web/project-update`
 - `POST /web/ingest`
 - `POST /web/task-update`
 - `POST /web/task-status`
@@ -100,6 +103,7 @@ Tyto soubory necommituj:
 - `data/runtime/discord_agents.json`
 - `data/runtime/imap_accounts.json`
 - `data/runtime/proposals.json`
+- `data/runtime/projects.json`
 - `data/runtime/channel_memory.json`
 - `data/runtime/feedback.json`
 
@@ -177,6 +181,8 @@ Poznámka k `ingest`:
 - návrhy můžeš před schválením upravit přes `set-role` a `set-priority`
 - ruční opravy se ukládají jako feedback (učení podle odesílatele)
 - schválení v aktuálním pipeline automaticky nic neplánuje do kalendáře (kalendář řešíš ručně až v dalším kroku)
+- ingest nově přidává `bundle` (seskupení souvisejících emailů, např. objednávka/faktura/doprava)
+- nad bundle je nově `project` vrstva s `subtask` položkami
 
 Web triage:
 - otevři `/triage`
@@ -188,13 +194,28 @@ Web triage:
 - detail kanálu otevřeš přes `/web/channel/<nazev_kanalu>` (např. `/web/channel/klimatika`)
 - v detailu kanálu vidíš i `Odesílatele`
 - v detailu kanálu můžeš změnit i `Role` (tím položku přesuneš do jiného kanálu), doplnit `Skupinu` (větší úkol), přidat `Komentář` a změnit stav na `Rozpracováno/Hotovo`
+- v detailu kanálu můžeš email přiřadit k existujícímu projektu nebo založit nový projekt + subtask
+- navíc je tam `Handling` rozhodnutí:
+  - `process` = zpracovat bez kalendáře
+  - `needs_attention` = vyžaduje tvoji pozornost
+  - `calendar` = kandidát na ruční naplánování do kalendáře
+  - `review` = ještě nerozhodnuto
 
 ## Aktuální pipeline (manuální kalendář)
 1. `ingest` načte emaily a připraví návrhy.
 2. V `/triage` upravíš role/prioritu a dáš `Uložit + Schválit vše`.
 3. V Discord `#orchestrator` spustíš `dispatch`.
-4. V `/web/channel/<kanal>` průběžně doplňuješ komentáře, skupiny a stav (`in_progress`/`done`).
+4. V `/web/channel/<kanal>` průběžně doplňuješ `handling`, komentáře, skupiny, přiřazení na projekt/subtask a stav (`in_progress`/`done`).
 5. Plánování do kalendáře je v této fázi manuální.
+
+## Project / Subtask vrstva
+- `/web/projects`: seznam dlouhodobých projektů (deadline/stav/počet napojených emailů).
+- `/web/project/{project_id}`: detail projektu + subtasky + napojené emaily.
+- v detailu projektu můžeš nastavit `status` a `deadline`.
+- v kanálovém detailu:
+  - vyber `Projekt` z dropdownu nebo vyplň `Nový projekt`
+  - volitelně vyplň `Nový subtask`
+  - `Uložit` přiřadí email do dlouhodobé projektové linie
 
 ## Jak založit Discord bota
 1. Otevři Discord Developer Portal.

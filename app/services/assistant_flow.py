@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
+from email.utils import parseaddr
 from uuid import uuid4
 
 from app.models import (
@@ -48,11 +50,14 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
                 subject=message.subject,
                 source_excerpt=message.body[:320],
                 role=classified.role,
+                handling=_initial_handling(classified.role, classified.requires_action),
                 summary=classified.summary,
                 requires_action=classified.requires_action,
                 priority=classified.priority,
                 duration_minutes=classified.suggested_duration_minutes,
                 next_step=_make_next_step(classified.role, message.subject),
+                bundle_key=_bundle_key(message.sender, message.subject, message.body),
+                bundle_label=_bundle_label(message.sender, message.subject, message.body),
             )
         )
 
@@ -166,3 +171,62 @@ def _make_next_step(role: str, subject: str) -> str:
     if role == "UNIVERZITA":
         return "Zkontroluj deadline a vlož přípravu do nejbližšího volného bloku."
     return f"Navrhni první konkrétní krok k tématu: {subject[:80]}"
+
+
+def _initial_handling(role: str, requires_action: bool) -> str:
+    if role in NON_CALENDAR_ROLES:
+        return "process"
+    if requires_action:
+        return "needs_attention"
+    return "process"
+
+
+def _bundle_key(sender: str, subject: str, body: str) -> str:
+    sender_domain = _sender_domain(sender)
+    order_id = _extract_order_id(f"{subject}\n{body[:500]}")
+    if order_id:
+        return f"{sender_domain}:{order_id.lower()}"
+    normalized = _normalize_subject_for_bundle(subject)
+    return f"{sender_domain}:{normalized[:80]}"
+
+
+def _bundle_label(sender: str, subject: str, body: str) -> str:
+    order_id = _extract_order_id(f"{subject}\n{body[:500]}")
+    if order_id:
+        return f"Objednávka {order_id}"
+    short = _normalize_subject_for_bundle(subject)[:60]
+    return short or _sender_domain(sender)
+
+
+def _sender_domain(sender: str) -> str:
+    _, email_addr = parseaddr(sender or "")
+    if "@" in email_addr:
+        return email_addr.split("@", 1)[1].lower()
+    return "unknown-sender"
+
+
+def _extract_order_id(text: str) -> str | None:
+    patterns = [
+        r"(?:objedn[aá]vka|order)\s*[#:\-]?\s*([A-Z0-9\-]{5,})",
+        r"(?:č[íi]slo|cislo)\s*(?:objedn[aá]vky)?\s*[#:\-]?\s*([A-Z0-9\-]{5,})",
+        r"#([A-Z0-9\-]{5,})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1).upper()
+    return None
+
+
+def _normalize_subject_for_bundle(subject: str) -> str:
+    text = (subject or "").lower()
+    text = re.sub(r"^\s*(re|fwd?)\s*:\s*", "", text)
+    text = re.sub(
+        r"\b(přijata|prijata|potvrzení|potvrzeni|zpracování|zpracovani|odeslána|odeslana|"
+        r"shipment|tracking|invoice|faktura|stav|status|update)\b",
+        " ",
+        text,
+    )
+    text = re.sub(r"[^a-z0-9ěščřžýáíéůúňó]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text or "email-thread"

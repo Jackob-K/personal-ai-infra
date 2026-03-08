@@ -27,6 +27,7 @@ from app.services.imap_accounts import load_imap_accounts
 from app.services.orchestrator import update_proposal_status
 from app.services.planner import plan_task_slot
 from app.services.proposal_store import list_proposals, save_proposals
+from app.services.projects_store import add_subtask, create_project, list_projects, update_project_meta
 from app.services.roles import load_roles
 from app.services.travel import estimate_travel
 
@@ -42,6 +43,7 @@ def root() -> RedirectResponse:
 @app.get("/web", response_class=HTMLResponse)
 def web_home() -> HTMLResponse:
     proposals = list_proposals()
+    projects = list_projects()
     counts = {
         "pending": len([p for p in proposals if p.status == "pending"]),
         "approved": len([p for p in proposals if p.status == "approved"]),
@@ -58,6 +60,7 @@ def web_home() -> HTMLResponse:
         "<ul>"
         "<li><a href='/triage'>Ingest + Triage</a></li>"
         "<li><a href='/web/channels'>Jednotlivé kanály</a></li>"
+        f"<li><a href='/web/projects'>Projekty</a> ({len(projects)})</li>"
         "<li><a href='/docs'>API Docs</a></li>"
         "</ul>"
     )
@@ -101,7 +104,9 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
 
     role = str(channel.get("role", "")).upper().strip()
     items = [p for p in list_proposals() if p.role == role and p.status != "rejected"]
+    projects = [p for p in list_projects() if p.role == role]
     roles = sorted(load_roles().keys()) + ["NEWSLETTER", "SPAM", "PHISHING"]
+    handling_modes = ["review", "process", "needs_attention", "calendar"]
     notice = f"<p style='color:#0b5'>{html.escape(msg)}</p>" if msg else ""
 
     rows: list[str] = []
@@ -113,6 +118,9 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
             f"<td>P{item.priority}</td>"
             f"<td>{html.escape(item.sender or '')}</td>"
             f"<td>{html.escape(item.role)}</td>"
+            f"<td>{html.escape(item.bundle_label or item.bundle_key or '')}</td>"
+            f"<td>{html.escape(item.handling)}</td>"
+            f"<td>{html.escape(_project_name(projects, item.project_id))}</td>"
             f"<td>{html.escape(item.task_group or '')}</td>"
             f"<td>{html.escape((item.subject or item.summary or '')[:120])}</td>"
             f"<td>{html.escape(item.comments[-1] if item.comments else '')}</td>"
@@ -121,6 +129,10 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
             f"<input type='hidden' name='proposal_id' value='{html.escape(item.id)}'>"
             f"<input type='hidden' name='channel_name' value='{html.escape(channel_name)}'>"
             f"<select name='role'>{_role_select_options(roles, item.role)}</select> "
+            f"<select name='handling'>{_mode_select_options(handling_modes, item.handling)}</select> "
+            f"<select name='project_id'>{_project_select_options(projects, item.project_id)}</select> "
+            "<input type='text' name='new_project_name' placeholder='Nový projekt' style='width:130px'> "
+            "<input type='text' name='subtask_title' placeholder='Nový subtask' style='width:130px'> "
             f"<input type='text' name='task_group' placeholder='Skupina' value='{html.escape(item.task_group or '')}' style='width:140px'> "
             "<input type='text' name='comment' placeholder='Komentář' style='width:220px'> "
             "<select name='status'>"
@@ -139,9 +151,9 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
         f"<p>Role: <b>{html.escape(role)}</b></p>"
         f"{notice}"
         "<table border='1' cellpadding='6' cellspacing='0'>"
-        "<thead><tr><th>ID</th><th>Stav</th><th>Priorita</th><th>Odesílatel</th><th>Role</th><th>Skupina</th><th>Náhled</th><th>Poslední komentář</th><th>Akce</th></tr></thead>"
+        "<thead><tr><th>ID</th><th>Stav</th><th>Priorita</th><th>Odesílatel</th><th>Role</th><th>Bundle</th><th>Handling</th><th>Projekt</th><th>Skupina</th><th>Náhled</th><th>Poslední komentář</th><th>Akce</th></tr></thead>"
         "<tbody>"
-        + ("".join(rows) if rows else "<tr><td colspan='9'>Žádné položky</td></tr>")
+        + ("".join(rows) if rows else "<tr><td colspan='12'>Žádné položky</td></tr>")
         + "</tbody></table>"
     )
     return HTMLResponse(_page(body, active="channels"))
@@ -154,9 +166,14 @@ async def web_task_update(request: Request) -> RedirectResponse:
     channel_name = str(form.get("channel_name", "")).strip()
     status = str(form.get("status", "keep")).strip()
     role = str(form.get("role", "")).strip().upper()
+    handling = str(form.get("handling", "")).strip()
+    project_id = str(form.get("project_id", "")).strip()
+    new_project_name = str(form.get("new_project_name", "")).strip()
+    subtask_title = str(form.get("subtask_title", "")).strip()
     task_group = str(form.get("task_group", "")).strip()
     comment = str(form.get("comment", "")).strip()
     allowed_roles = set(load_roles().keys()) | {"NEWSLETTER", "SPAM", "PHISHING"}
+    allowed_handling = {"review", "process", "needs_attention", "calendar"}
 
     proposals = list_proposals()
     proposal = _find_proposal_by_id_prefix(proposals, proposal_id)
@@ -167,6 +184,27 @@ async def web_task_update(request: Request) -> RedirectResponse:
         if role not in allowed_roles:
             return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Neplatna+role", status_code=303)
         proposal.role = role
+    if handling:
+        if handling not in allowed_handling:
+            return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Neplatny+handling", status_code=303)
+        proposal.handling = handling
+    if new_project_name:
+        project = create_project(new_project_name, proposal.role)
+        proposal.project_id = project.id
+        project_id = project.id
+    elif project_id == "__none__":
+        proposal.project_id = None
+        proposal.subtask_id = None
+    elif project_id:
+        known_project = next((p for p in list_projects() if p.id == project_id), None)
+        if known_project is None:
+            return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Project+nenalezen", status_code=303)
+        proposal.project_id = project_id
+    if subtask_title:
+        if not proposal.project_id:
+            return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Nejdriv+vyber+projekt", status_code=303)
+        subtask = add_subtask(proposal.project_id, subtask_title, priority=proposal.priority)
+        proposal.subtask_id = subtask.id
     if task_group:
         proposal.task_group = task_group[:120]
     if comment:
@@ -178,6 +216,115 @@ async def web_task_update(request: Request) -> RedirectResponse:
 
     save_proposals(proposals)
     return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Zmena+ulozena", status_code=303)
+
+
+@app.get("/web/projects", response_class=HTMLResponse)
+def web_projects() -> HTMLResponse:
+    projects = list_projects()
+    proposals = list_proposals()
+    rows: list[str] = []
+    for project in projects:
+        linked_count = len([p for p in proposals if p.project_id == project.id and p.status != "rejected"])
+        deadline = project.deadline.isoformat() if project.deadline else "-"
+        rows.append(
+            "<tr>"
+            f"<td><a href='/web/project/{html.escape(project.id)}'>{html.escape(project.name)}</a></td>"
+            f"<td>{html.escape(project.role)}</td>"
+            f"<td>{html.escape(project.status)}</td>"
+            f"<td>{deadline}</td>"
+            f"<td>{linked_count}</td>"
+            f"<td>{len(project.subtasks)}</td>"
+            "</tr>"
+        )
+    body = (
+        "<h1>Projekty</h1>"
+        "<p>Dlouhodobé linky nad emaily (bundle/project/subtask).</p>"
+        "<table border='1' cellpadding='6' cellspacing='0'>"
+        "<thead><tr><th>Název</th><th>Role</th><th>Stav</th><th>Deadline</th><th>Napojené emaily</th><th>Subtasky</th></tr></thead>"
+        "<tbody>"
+        + ("".join(rows) if rows else "<tr><td colspan='6'>Žádné projekty</td></tr>")
+        + "</tbody></table>"
+    )
+    return HTMLResponse(_page(body, active="projects"))
+
+
+@app.get("/web/project/{project_id}", response_class=HTMLResponse)
+def web_project_detail(project_id: str, msg: str | None = None) -> HTMLResponse:
+    projects = list_projects()
+    project = next((p for p in projects if p.id == project_id), None)
+    if project is None:
+        return HTMLResponse(_page("<h1>Projekt nenalezen</h1>", active="projects"))
+    linked = [p for p in list_proposals() if p.project_id == project.id and p.status != "rejected"]
+    notice = f"<p style='color:#0b5'>{html.escape(msg)}</p>" if msg else ""
+
+    task_rows = "".join(
+        [
+            "<tr>"
+            f"<td>{html.escape(t.title)}</td>"
+            f"<td>{html.escape(t.status)}</td>"
+            f"<td>P{t.priority}</td>"
+            "</tr>"
+            for t in project.subtasks
+        ]
+    ) or "<tr><td colspan='3'>Žádné subtasky</td></tr>"
+
+    email_rows = "".join(
+        [
+            "<tr>"
+            f"<td><code>{html.escape(p.id[:8])}</code></td>"
+            f"<td>{html.escape(p.sender)}</td>"
+            f"<td>{html.escape(p.subject or p.summary)}</td>"
+            f"<td>{html.escape(p.status)}</td>"
+            "</tr>"
+            for p in linked[:100]
+        ]
+    ) or "<tr><td colspan='4'>Žádné emaily</td></tr>"
+
+    body = (
+        f"<h1>Projekt: {html.escape(project.name)}</h1>"
+        f"{notice}"
+        f"<p>Role: <b>{html.escape(project.role)}</b> | Stav: <b>{html.escape(project.status)}</b> | Deadline: <b>{html.escape(project.deadline.isoformat() if project.deadline else '-')}</b></p>"
+        "<form method='post' action='/web/project-update' style='margin-bottom:14px'>"
+        f"<input type='hidden' name='project_id' value='{html.escape(project.id)}'>"
+        "<select name='status'>"
+        + _project_status_options(project.status)
+        + "</select> "
+        f"<input type='date' name='deadline' value='{html.escape(project.deadline.isoformat() if project.deadline else '')}'> "
+        "<button type='submit'>Uložit projekt</button>"
+        "</form>"
+        "<h2>Subtasky</h2>"
+        "<table border='1' cellpadding='6' cellspacing='0'>"
+        "<thead><tr><th>Název</th><th>Stav</th><th>Priorita</th></tr></thead>"
+        f"<tbody>{task_rows}</tbody></table>"
+        "<h2>Napojené emaily</h2>"
+        "<table border='1' cellpadding='6' cellspacing='0'>"
+        "<thead><tr><th>ID</th><th>Odesílatel</th><th>Předmět</th><th>Stav</th></tr></thead>"
+        f"<tbody>{email_rows}</tbody></table>"
+    )
+    return HTMLResponse(_page(body, active="projects"))
+
+
+@app.post("/web/project-update")
+async def web_project_update(request: Request) -> RedirectResponse:
+    form = await request.form()
+    project_id = str(form.get("project_id", "")).strip()
+    status = str(form.get("status", "")).strip()
+    deadline_raw = str(form.get("deadline", "")).strip()
+    allowed = {"open", "blocked", "waiting", "done"}
+    if status not in allowed:
+        return RedirectResponse(url=f"/web/project/{project_id}?msg=Neplatny+status", status_code=303)
+
+    deadline = None
+    if deadline_raw:
+        try:
+            deadline = date.fromisoformat(deadline_raw)
+        except ValueError:
+            return RedirectResponse(url=f"/web/project/{project_id}?msg=Neplatny+deadline", status_code=303)
+    try:
+        update_project_meta(project_id, status=status, deadline=deadline)
+    except ValueError:
+        return RedirectResponse(url="/web/projects?msg=Project+nenalezen", status_code=303)
+    return RedirectResponse(url=f"/web/project/{project_id}?msg=Projekt+ulozen", status_code=303)
 
 
 @app.post("/web/task-status")
@@ -400,12 +547,47 @@ def _role_select_options(roles: list[str], selected: str) -> str:
     return "".join(options)
 
 
+def _mode_select_options(modes: list[str], selected: str) -> str:
+    options: list[str] = []
+    for mode in modes:
+        sel = " selected" if mode == selected else ""
+        options.append(f"<option value='{html.escape(mode)}'{sel}>{html.escape(mode)}</option>")
+    return "".join(options)
+
+
+def _project_select_options(projects, selected: str | None) -> str:
+    options = ["<option value='__none__'>Bez projektu</option>"]
+    for project in projects:
+        sel = " selected" if project.id == selected else ""
+        options.append(f"<option value='{html.escape(project.id)}'{sel}>{html.escape(project.name)}</option>")
+    return "".join(options)
+
+
+def _project_name(projects, project_id: str | None) -> str:
+    if not project_id:
+        return "-"
+    project = next((p for p in projects if p.id == project_id), None)
+    if project is None:
+        return "?"
+    return project.name
+
+
+def _project_status_options(selected: str) -> str:
+    values = ["open", "blocked", "waiting", "done"]
+    options: list[str] = []
+    for value in values:
+        sel = " selected" if value == selected else ""
+        options.append(f"<option value='{value}'{sel}>{value}</option>")
+    return "".join(options)
+
+
 def _page(body: str, active: str = "home") -> str:
     nav = (
         "<nav style='margin-bottom:14px'>"
         f"<a href='/web' style='margin-right:12px;{_tab_style(active == 'home')}'>Home</a>"
         f"<a href='/triage' style='margin-right:12px;{_tab_style(active == 'triage')}'>Ingest + Triage</a>"
-        f"<a href='/web/channels' style='{_tab_style(active == 'channels')}'>Jednotlivé kanály</a>"
+        f"<a href='/web/channels' style='margin-right:12px;{_tab_style(active == 'channels')}'>Jednotlivé kanály</a>"
+        f"<a href='/web/projects' style='{_tab_style(active == 'projects')}'>Projekty</a>"
         "</nav>"
     )
     return (
