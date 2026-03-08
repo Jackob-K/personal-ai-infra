@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from datetime import date
+from datetime import datetime
+from uuid import uuid4
 
 from app.models import ApproveProposalRequest, IngestImapRequest, IngestImapResponse, TaskProposal
 from app.services.agent_registry import find_channel_agent, find_role_channel
@@ -10,7 +12,8 @@ from app.services.channel_memory import append_message, get_recent_messages
 from app.services.feedback import record_feedback
 from app.services.imap_accounts import load_imap_accounts
 from app.services.proposal_store import list_proposals, save_proposals
-from app.services.roles import load_roles
+from app.services.projects_store import add_subtask, create_project, list_projects
+from app.services.roles import get_role_config, load_roles
 
 
 ROLE_ALIASES = {
@@ -108,15 +111,49 @@ def _handle_specialist(channel_name: str, role: str, author_name: str, content: 
     recent = get_recent_messages(channel_name)
     recent_count = max(0, len(recent) - 1)
     prefix = _role_prefix(role)
+    cmd = _extract_command(content.lower())
+
+    if cmd in {"help", "napoveda", "nápověda"}:
+        return (
+            f"{prefix}\n\n"
+            "Specifické příkazy kanálu:\n"
+            "- project <název projektu>\n"
+            "- task <popis úkolu>\n"
+            "- pending\n\n"
+            "Když napíšeš běžnou větu, vytvořím z ní rychlý úkol v tomto kanálu."
+        )
 
     if "pending" in content.lower():
         return f"{prefix}\n\n{_format_pending(role_filter=role)}"
 
+    if cmd == "project":
+        project_name = content.split(maxsplit=1)[1].strip() if len(content.split(maxsplit=1)) > 1 else ""
+        if not project_name:
+            return "Použití: project <název projektu>"
+        project = create_project(project_name, _normalize_role(role))
+        return (
+            f"{prefix}\n\n"
+            f"Projekt založen: `{project.name}` ({project.id[:8]}). "
+            "Další úkoly můžeš posílat přes `task ...` nebo běžnou větu."
+        )
+
+    if cmd == "task":
+        text = content.split(maxsplit=1)[1].strip() if len(content.split(maxsplit=1)) > 1 else ""
+        if not text:
+            return "Použití: task <popis úkolu>"
+        created = _create_manual_specialist_task(role, author_name, channel_name, text)
+        return (
+            f"{prefix}\n\n"
+            f"Úkol vytvořen: `{created.id[:8]}` | {created.role} | P{created.priority}\n"
+            f"Náhled: {created.subject}"
+        )
+
+    created = _create_manual_specialist_task(role, author_name, channel_name, content)
     return (
         f"{prefix}\n\n"
-        f"Zprávu od {author_name} jsem zařadil do role `{role}`. "
-        f"Aktuální kanál má uložený kontext {recent_count} předchozích zpráv. "
-        "V další iteraci sem připojíme plné reasoning workflow a akce nad tasky/emaily."
+        f"Založil jsem rychlý úkol `{created.id[:8]}` v roli `{created.role}`. "
+        f"Kontext kanálu: {recent_count} zpráv. "
+        "Když chceš explicitní projekt, použij `project <název>`."
     )
 
 
@@ -471,3 +508,52 @@ def _dispatch_hint() -> str:
     if count == 0:
         return "Není co dispatchovat. Schval nejdřív položky přes approve / web triage."
     return f"Připraveno k dispatch: {count}. Bot je po příkazu rozešle do kanálů."
+
+
+def _create_manual_specialist_task(role: str, author_name: str, channel_name: str, text: str) -> TaskProposal:
+    normalized_role = _normalize_role(role)
+    cfg = get_role_config(normalized_role)
+    priority = int(cfg.get("priority", 3))
+    duration = int(cfg.get("default_duration_minutes", 45))
+    subject = text.strip()[:180]
+
+    proposal = TaskProposal(
+        id=str(uuid4()),
+        created_at=datetime.utcnow(),
+        status="in_progress",
+        account_name="manual_discord",
+        message_id=f"manual:{channel_name}:{uuid4()}",
+        sender=author_name,
+        subject=subject,
+        source_excerpt=text[:320],
+        role=normalized_role,
+        handling="needs_attention",
+        summary=subject,
+        requires_action=True,
+        priority=max(1, min(5, priority)),
+        duration_minutes=max(5, min(600, duration)),
+        next_step=f"Rozpracuj úkol z kanálu {channel_name}.",
+        bundle_key=f"manual:{channel_name}",
+        bundle_label=f"Discord {channel_name}",
+        comments=[f"Vytvořeno z Discord zprávy: {text[:200]}"],
+    )
+
+    project = _latest_open_project_for_role(normalized_role)
+    if project is None:
+        project = create_project(f"{normalized_role} Inbox", normalized_role)
+    proposal.project_id = project.id
+    subtask = add_subtask(project.id, subject, priority=proposal.priority)
+    proposal.subtask_id = subtask.id
+
+    proposals = list_proposals()
+    proposals.append(proposal)
+    save_proposals(proposals)
+    return proposal
+
+
+def _latest_open_project_for_role(role: str):
+    projects = [p for p in list_projects() if p.role == role and p.status in {"open", "waiting"}]
+    if not projects:
+        return None
+    projects.sort(key=lambda p: p.created_at, reverse=True)
+    return projects[0]

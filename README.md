@@ -171,7 +171,12 @@ V kanálu `#orchestrator`:
 - `approve <proposal_id> [YYYY-MM-DD]`
 - `reject <proposal_id>`
 
-V tematických kanálech můžeš zatím psát přirozeně. Bot vrátí odpověď v rámci role a drží jednoduchou per-channel paměť v `data/runtime/channel_memory.json`.
+V tematických kanálech:
+- `project <název projektu>` založí dlouhodobý projekt v dané roli
+- `task <popis úkolu>` založí úkol a naváže ho na aktivní projekt
+- běžná věta se automaticky uloží jako rychlý úkol (manual task)
+
+Bot drží jednoduchou per-channel paměť v `data/runtime/channel_memory.json`.
 
 Poznámka k `ingest`:
 - vypíše počty načtených emailů
