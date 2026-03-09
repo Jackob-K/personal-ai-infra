@@ -397,6 +397,19 @@ async def web_subtask_update(request: Request) -> RedirectResponse:
         update_subtask(project_id=project_id, subtask_id=subtask_id, status=status, note=note or None)
     except ValueError as exc:
         return RedirectResponse(url=f"/web/project/{project_id}?msg={html.escape(str(exc))}", status_code=303)
+
+    # Keep linked proposal status in sync with subtask lifecycle so Home reflects reality.
+    proposals = list_proposals()
+    changed = False
+    mapped_status = _proposal_status_from_subtask_status(status)
+    for proposal in proposals:
+        if proposal.project_id == project_id and proposal.subtask_id == subtask_id:
+            if proposal.status != mapped_status:
+                proposal.status = mapped_status
+                changed = True
+    if changed:
+        save_proposals(proposals)
+
     return RedirectResponse(url=f"/web/project/{project_id}?msg=Subtask+ulozen", status_code=303)
 
 
@@ -661,6 +674,17 @@ def _subtask_status_options(selected: str) -> str:
         sel = " selected" if value == selected else ""
         options.append(f"<option value='{value}'{sel}>{value}</option>")
     return "".join(options)
+
+
+def _proposal_status_from_subtask_status(subtask_status: str) -> str:
+    mapping = {
+        "todo": "approved",
+        "in_progress": "in_progress",
+        "submitted": "in_progress",
+        "needs_revision": "in_progress",
+        "done": "done",
+    }
+    return mapping.get(subtask_status, "in_progress")
 
 
 def _page(body: str, active: str = "home") -> str:

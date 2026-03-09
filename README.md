@@ -224,6 +224,7 @@ Web triage:
 - `/web/project/{project_id}`: detail projektu + subtasky + napojené emaily.
 - v detailu projektu můžeš nastavit `status` a `deadline`.
 - subtask stavy: `todo`, `in_progress`, `submitted`, `needs_revision`, `done`
+- změna stavu subtasku se automaticky propisuje do navázaného tasku/emailu (kvůli Home přehledu)
 - v kanálovém detailu:
   - vyber `Projekt` z dropdownu nebo vyplň `Nový projekt`
   - volitelně vyplň `Nový subtask`
