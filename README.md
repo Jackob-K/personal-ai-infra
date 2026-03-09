@@ -199,7 +199,9 @@ Web triage:
 - pokud je vše správně, klikni `Pokračuj (uloží vše)` (stejnou větu můžeš napsat i do Discordu)
 - když máš vše připravené najednou, použij `Uložit + Schválit vše`
 - pro přehled používej `/web` a `/web/channels`
-- na `/web` je vpravo panel `Aktuální úkoly` (všechny nehotové položky)
+- na `/web` jsou vpravo dva panely:
+  - `Neotevřené` (pending/approved/dispatched)
+  - `Rozpracované / čekající` (in_progress)
 - detail kanálu otevřeš přes `/web/channel/<nazev_kanalu>` (např. `/web/channel/klimatika`)
 - v detailu kanálu vidíš i `Odesílatele`
 - v detailu kanálu můžeš změnit i `Role` (tím položku přesuneš do jiného kanálu), doplnit `Skupinu` (větší úkol), přidat `Komentář` a změnit stav na `Rozpracováno/Hotovo`

@@ -51,12 +51,12 @@ def web_home() -> HTMLResponse:
         "dispatched": len([p for p in proposals if p.status == "dispatched"]),
         "done": len([p for p in proposals if p.status == "done"]),
     }
-    active_proposals = [
-        p for p in proposals if p.status in {"pending", "approved", "in_progress", "dispatched"} and p.role != "ORCHESTRATOR"
-    ]
-    active_proposals.sort(key=lambda p: (p.priority, p.created_at))
+    incoming_proposals = [p for p in proposals if p.status in {"pending", "approved", "dispatched"} and p.role != "ORCHESTRATOR"]
+    opened_proposals = [p for p in proposals if p.status == "in_progress" and p.role != "ORCHESTRATOR"]
+    incoming_proposals.sort(key=lambda p: (p.priority, p.created_at))
+    opened_proposals.sort(key=lambda p: (p.priority, p.created_at))
 
-    task_rows = "".join(
+    incoming_rows = "".join(
         [
             "<li style='margin-bottom:6px'>"
             f"<code>{html.escape(item.id[:8])}</code> "
@@ -64,13 +64,30 @@ def web_home() -> HTMLResponse:
             f"[{html.escape(item.status)} | P{item.priority}]<br>"
             f"{html.escape((item.subject or item.summary or '')[:110])}"
             "</li>"
-            for item in active_proposals[:30]
+            for item in incoming_proposals[:30]
         ]
     )
-    tasks_block = (
-        "<p>Žádné aktivní úkoly. Fronta je čistá.</p>"
-        if not active_proposals
-        else f"<ul style='padding-left:18px;margin-top:8px'>{task_rows}</ul>"
+    opened_rows = "".join(
+        [
+            "<li style='margin-bottom:6px'>"
+            f"<code>{html.escape(item.id[:8])}</code> "
+            f"<b>{html.escape(item.role)}</b> "
+            f"[{html.escape(item.status)} | P{item.priority}]<br>"
+            f"{html.escape((item.subject or item.summary or '')[:110])}"
+            "</li>"
+            for item in opened_proposals[:30]
+        ]
+    )
+
+    incoming_block = (
+        "<p>Žádné nové úkoly.</p>"
+        if not incoming_proposals
+        else f"<ul style='padding-left:18px;margin-top:8px'>{incoming_rows}</ul>"
+    )
+    opened_block = (
+        "<p>Žádné rozpracované úkoly.</p>"
+        if not opened_proposals
+        else f"<ul style='padding-left:18px;margin-top:8px'>{opened_rows}</ul>"
     )
 
     body = (
@@ -89,8 +106,12 @@ def web_home() -> HTMLResponse:
         "</ul>"
         "</div>"
         "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
-        "<h3 style='margin:0 0 8px 0'>Aktuální úkoly</h3>"
-        f"{tasks_block}"
+        f"<h3 style='margin:0 0 8px 0'>Neotevřené ({len(incoming_proposals)})</h3>"
+        f"{incoming_block}"
+        "</div>"
+        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
+        f"<h3 style='margin:0 0 8px 0'>Rozpracované / čekající ({len(opened_proposals)})</h3>"
+        f"{opened_block}"
         "</div>"
         "</div>"
     )
