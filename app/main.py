@@ -47,12 +47,14 @@ def web_home() -> HTMLResponse:
     counts = {
         "pending": len([p for p in proposals if p.status == "pending"]),
         "approved": len([p for p in proposals if p.status == "approved"]),
-        "in_progress": len([p for p in proposals if p.status == "in_progress"]),
+        "in_progress": len([p for p in proposals if p.status in {"in_progress", "submitted", "needs_revision"}]),
         "dispatched": len([p for p in proposals if p.status == "dispatched"]),
         "done": len([p for p in proposals if p.status == "done"]),
     }
     incoming_proposals = [p for p in proposals if p.status in {"pending", "approved", "dispatched"} and p.role != "ORCHESTRATOR"]
-    opened_proposals = [p for p in proposals if p.status == "in_progress" and p.role != "ORCHESTRATOR"]
+    opened_proposals = [
+        p for p in proposals if p.status in {"in_progress", "submitted", "needs_revision"} and p.role != "ORCHESTRATOR"
+    ]
     incoming_proposals.sort(key=lambda p: (p.priority, p.created_at))
     opened_proposals.sort(key=lambda p: (p.priority, p.created_at))
 
@@ -125,7 +127,11 @@ def web_channels() -> HTMLResponse:
     rows: list[str] = []
     for channel in channels:
         role = str(channel.get("role", ""))
-        items = [p for p in proposals if p.role == role and p.status in {"approved", "in_progress", "dispatched"}]
+        items = [
+            p
+            for p in proposals
+            if p.role == role and p.status in {"approved", "in_progress", "submitted", "needs_revision", "dispatched"}
+        ]
         channel_name = html.escape(str(channel.get("channel_name", "")))
         rows.append(
             "<tr>"
@@ -402,10 +408,26 @@ async def web_subtask_update(request: Request) -> RedirectResponse:
     proposals = list_proposals()
     changed = False
     mapped_status = _proposal_status_from_subtask_status(status)
+    subtask_title = ""
+    project = next((p for p in list_projects() if p.id == project_id), None)
+    if project:
+        st = next((s for s in project.subtasks if s.id == subtask_id), None)
+        if st:
+            subtask_title = (st.title or "").strip().lower()
+
     for proposal in proposals:
-        if proposal.project_id == project_id and proposal.subtask_id == subtask_id:
-            if proposal.status != mapped_status:
+        exact_link = proposal.project_id == project_id and proposal.subtask_id == subtask_id
+        legacy_link = (
+            proposal.project_id == project_id
+            and not proposal.subtask_id
+            and subtask_title
+            and (proposal.subject or "").strip().lower() == subtask_title
+        )
+        if exact_link or legacy_link:
+            if proposal.status != mapped_status or (legacy_link and not proposal.subtask_id):
                 proposal.status = mapped_status
+                if legacy_link and not proposal.subtask_id:
+                    proposal.subtask_id = subtask_id
                 changed = True
     if changed:
         save_proposals(proposals)
@@ -680,8 +702,8 @@ def _proposal_status_from_subtask_status(subtask_status: str) -> str:
     mapping = {
         "todo": "approved",
         "in_progress": "in_progress",
-        "submitted": "in_progress",
-        "needs_revision": "in_progress",
+        "submitted": "submitted",
+        "needs_revision": "needs_revision",
         "done": "done",
     }
     return mapping.get(subtask_status, "in_progress")

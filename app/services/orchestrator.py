@@ -282,7 +282,11 @@ def _comment_command(content: str) -> str:
 
 
 def _format_pending(role_filter: str | None = None) -> str:
-    pending = [item for item in list_proposals() if item.status in {"pending", "approved", "in_progress"}]
+    pending = [
+        item
+        for item in list_proposals()
+        if item.status in {"pending", "approved", "in_progress", "submitted", "needs_revision"}
+    ]
     if role_filter:
         role_filter = _normalize_role(role_filter)
         pending = [item for item in pending if item.role == role_filter]
@@ -293,7 +297,11 @@ def _format_pending(role_filter: str | None = None) -> str:
 
 
 def _format_triage() -> str:
-    pending = [item for item in list_proposals() if item.status in {"pending", "approved", "in_progress"}]
+    pending = [
+        item
+        for item in list_proposals()
+        if item.status in {"pending", "approved", "in_progress", "submitted", "needs_revision"}
+    ]
     if not pending:
         return "Triage fronta je prázdná."
 
@@ -420,7 +428,11 @@ def _resolve_proposal_id(candidate: str) -> str:
 
 
 def _format_ingest_result(result: IngestImapResponse) -> str:
-    pending = [item for item in list_proposals() if item.status in {"pending", "approved", "in_progress"}]
+    pending = [
+        item
+        for item in list_proposals()
+        if item.status in {"pending", "approved", "in_progress", "submitted", "needs_revision"}
+    ]
     new_items = [item for item in result.proposals if item.id in set(result.new_proposal_ids)]
     lines = [
         "IMAP ingest hotov.",
