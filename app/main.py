@@ -51,8 +51,32 @@ def web_home() -> HTMLResponse:
         "dispatched": len([p for p in proposals if p.status == "dispatched"]),
         "done": len([p for p in proposals if p.status == "done"]),
     }
+    active_proposals = [
+        p for p in proposals if p.status in {"pending", "approved", "in_progress", "dispatched"} and p.role != "ORCHESTRATOR"
+    ]
+    active_proposals.sort(key=lambda p: (p.priority, p.created_at))
+
+    task_rows = "".join(
+        [
+            "<li style='margin-bottom:6px'>"
+            f"<code>{html.escape(item.id[:8])}</code> "
+            f"<b>{html.escape(item.role)}</b> "
+            f"[{html.escape(item.status)} | P{item.priority}]<br>"
+            f"{html.escape((item.subject or item.summary or '')[:110])}"
+            "</li>"
+            for item in active_proposals[:30]
+        ]
+    )
+    tasks_block = (
+        "<p>Žádné aktivní úkoly. Fronta je čistá.</p>"
+        if not active_proposals
+        else f"<ul style='padding-left:18px;margin-top:8px'>{task_rows}</ul>"
+    )
+
     body = (
         "<h1>Home</h1>"
+        "<div style='display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap'>"
+        "<div style='flex:2;min-width:340px'>"
         "<p>Centrální přehled workflow.</p>"
         f"<p>Pending: <b>{counts['pending']}</b> | Approved: <b>{counts['approved']}</b> | "
         f"In progress: <b>{counts['in_progress']}</b> | Dispatched: <b>{counts['dispatched']}</b> | "
@@ -63,6 +87,12 @@ def web_home() -> HTMLResponse:
         f"<li><a href='/web/projects'>Projekty</a> ({len(projects)})</li>"
         "<li><a href='/docs'>API Docs</a></li>"
         "</ul>"
+        "</div>"
+        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
+        "<h3 style='margin:0 0 8px 0'>Aktuální úkoly</h3>"
+        f"{tasks_block}"
+        "</div>"
+        "</div>"
     )
     return HTMLResponse(_page(body, active="home"))
 
