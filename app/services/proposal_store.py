@@ -51,3 +51,13 @@ def upsert_proposals(new_items: list[TaskProposal]) -> tuple[int, int, list[str]
             by_key[key] = item
     save_proposals(list(by_key.values()))
     return created, updated, created_ids
+
+
+def delete_proposal(proposal_id: str) -> TaskProposal | None:
+    proposals = list_proposals()
+    idx = next((i for i, item in enumerate(proposals) if item.id == proposal_id), None)
+    if idx is None:
+        return None
+    deleted = proposals.pop(idx)
+    save_proposals(proposals)
+    return deleted

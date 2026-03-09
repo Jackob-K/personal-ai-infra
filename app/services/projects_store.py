@@ -61,3 +61,38 @@ def update_project_meta(project_id: str, status: str | None = None, deadline: da
     project.deadline = deadline
     save_projects(projects)
     return project
+
+
+def remove_subtask(project_id: str | None, subtask_id: str | None) -> bool:
+    if not project_id or not subtask_id:
+        return False
+    projects = list_projects()
+    project = next((p for p in projects if p.id == project_id), None)
+    if project is None:
+        return False
+    before = len(project.subtasks)
+    project.subtasks = [s for s in project.subtasks if s.id != subtask_id]
+    if len(project.subtasks) == before:
+        return False
+    save_projects(projects)
+    return True
+
+
+def update_subtask(project_id: str, subtask_id: str, status: str, note: str | None = None) -> ProjectSubtask:
+    projects = list_projects()
+    project = next((p for p in projects if p.id == project_id), None)
+    if project is None:
+        raise ValueError(f"Project '{project_id}' not found")
+    subtask = next((s for s in project.subtasks if s.id == subtask_id), None)
+    if subtask is None:
+        raise ValueError(f"Subtask '{subtask_id}' not found")
+
+    allowed = {"todo", "in_progress", "submitted", "needs_revision", "done"}
+    if status not in allowed:
+        raise ValueError("Invalid subtask status")
+
+    subtask.status = status
+    if note:
+        subtask.notes.append(note[:500])
+    save_projects(projects)
+    return subtask

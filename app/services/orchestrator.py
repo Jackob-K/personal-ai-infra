@@ -11,8 +11,8 @@ from app.services.assistant_flow import approve_or_reject_proposal, ingest_and_c
 from app.services.channel_memory import append_message, get_recent_messages
 from app.services.feedback import record_feedback
 from app.services.imap_accounts import load_imap_accounts
-from app.services.proposal_store import list_proposals, save_proposals
-from app.services.projects_store import add_subtask, create_project, list_projects
+from app.services.proposal_store import delete_proposal, list_proposals, save_proposals
+from app.services.projects_store import add_subtask, create_project, list_projects, remove_subtask
 from app.services.roles import get_role_config, load_roles
 
 
@@ -34,6 +34,7 @@ HELP_TEXT = """Dostupné příkazy:
 - pokracuj
 - start <proposal_id>
 - done <proposal_id>
+- delete <proposal_id>
 - set-group <proposal_id> <GROUP>
 - comment <proposal_id> <TEXT>
 - set-role <proposal_id> <ROLE>
@@ -86,6 +87,8 @@ def _handle_orchestrator(content: str) -> str:
         return _status_command(content, target_status="in_progress")
     if cmd == "done":
         return _status_command(content, target_status="done")
+    if cmd == "delete":
+        return _delete_command(content)
     if cmd == "set-group":
         return _set_group_command(content)
     if cmd == "comment":
@@ -119,6 +122,7 @@ def _handle_specialist(channel_name: str, role: str, author_name: str, content: 
             "Specifické příkazy kanálu:\n"
             "- project <název projektu>\n"
             "- task <popis úkolu>\n"
+            "- delete <proposal_id>\n"
             "- pending\n\n"
             "Když napíšeš běžnou větu, vytvořím z ní rychlý úkol v tomto kanálu."
         )
@@ -147,6 +151,9 @@ def _handle_specialist(channel_name: str, role: str, author_name: str, content: 
             f"Úkol vytvořen: `{created.id[:8]}` | {created.role} | P{created.priority}\n"
             f"Náhled: {created.subject}"
         )
+
+    if cmd == "delete":
+        return _delete_command(content)
 
     created = _create_manual_specialist_task(role, author_name, channel_name, content)
     return (
@@ -200,6 +207,24 @@ def _reject_command(content: str) -> str:
     except ValueError as exc:
         return str(exc)
     return f"Návrh {proposal.id} byl odmítnut."
+
+
+def _delete_command(content: str) -> str:
+    parts = content.split()
+    if len(parts) < 2:
+        return "Použití: delete <proposal_id>"
+    try:
+        proposal_id = _resolve_proposal_id(parts[1])
+    except ValueError as exc:
+        return str(exc)
+    proposal = next((item for item in list_proposals() if item.id == proposal_id), None)
+    if proposal is None:
+        return f"Proposal '{proposal_id}' not found"
+    deleted = delete_proposal(proposal_id)
+    if deleted is None:
+        return f"Proposal '{proposal_id}' not found"
+    remove_subtask(deleted.project_id, deleted.subtask_id)
+    return f"Proposal {deleted.id[:8]} byl smazán."
 
 
 def _status_command(content: str, target_status: str) -> str:

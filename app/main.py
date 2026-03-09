@@ -27,7 +27,7 @@ from app.services.imap_accounts import load_imap_accounts
 from app.services.orchestrator import update_proposal_status
 from app.services.planner import plan_task_slot
 from app.services.proposal_store import list_proposals, save_proposals
-from app.services.projects_store import add_subtask, create_project, list_projects, update_project_meta
+from app.services.projects_store import add_subtask, create_project, list_projects, update_project_meta, update_subtask
 from app.services.roles import load_roles
 from app.services.travel import estimate_travel
 
@@ -261,7 +261,15 @@ def web_project_detail(project_id: str, msg: str | None = None) -> HTMLResponse:
         [
             "<tr>"
             f"<td>{html.escape(t.title)}</td>"
-            f"<td>{html.escape(t.status)}</td>"
+            "<td>"
+            "<form method='post' action='/web/subtask-update' style='display:inline'>"
+            f"<input type='hidden' name='project_id' value='{html.escape(project.id)}'>"
+            f"<input type='hidden' name='subtask_id' value='{html.escape(t.id)}'>"
+            f"<select name='status'>{_subtask_status_options(t.status)}</select> "
+            "<input type='text' name='note' placeholder='Poznámka (volitelná)' style='width:180px'> "
+            "<button type='submit'>Uložit</button>"
+            "</form>"
+            "</td>"
             f"<td>P{t.priority}</td>"
             "</tr>"
             for t in project.subtasks
@@ -325,6 +333,20 @@ async def web_project_update(request: Request) -> RedirectResponse:
     except ValueError:
         return RedirectResponse(url="/web/projects?msg=Project+nenalezen", status_code=303)
     return RedirectResponse(url=f"/web/project/{project_id}?msg=Projekt+ulozen", status_code=303)
+
+
+@app.post("/web/subtask-update")
+async def web_subtask_update(request: Request) -> RedirectResponse:
+    form = await request.form()
+    project_id = str(form.get("project_id", "")).strip()
+    subtask_id = str(form.get("subtask_id", "")).strip()
+    status = str(form.get("status", "")).strip()
+    note = str(form.get("note", "")).strip()
+    try:
+        update_subtask(project_id=project_id, subtask_id=subtask_id, status=status, note=note or None)
+    except ValueError as exc:
+        return RedirectResponse(url=f"/web/project/{project_id}?msg={html.escape(str(exc))}", status_code=303)
+    return RedirectResponse(url=f"/web/project/{project_id}?msg=Subtask+ulozen", status_code=303)
 
 
 @app.post("/web/task-status")
@@ -574,6 +596,15 @@ def _project_name(projects, project_id: str | None) -> str:
 
 def _project_status_options(selected: str) -> str:
     values = ["open", "blocked", "waiting", "done"]
+    options: list[str] = []
+    for value in values:
+        sel = " selected" if value == selected else ""
+        options.append(f"<option value='{value}'{sel}>{value}</option>")
+    return "".join(options)
+
+
+def _subtask_status_options(selected: str) -> str:
+    values = ["todo", "in_progress", "submitted", "needs_revision", "done"]
     options: list[str] = []
     for value in values:
         sel = " selected" if value == selected else ""

@@ -141,7 +141,7 @@ class TravelEstimateResponse(BaseModel):
 class ProjectSubtask(BaseModel):
     id: str
     title: str
-    status: Literal["todo", "in_progress", "done"] = "todo"
+    status: Literal["todo", "in_progress", "submitted", "needs_revision", "done"] = "todo"
     priority: int = Field(default=3, ge=1, le=5)
     notes: list[str] = Field(default_factory=list)
 

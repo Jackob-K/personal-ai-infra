@@ -45,6 +45,7 @@ Logika:
 - `GET /web/projects`
 - `GET /web/project/{project_id}`
 - `POST /web/project-update`
+- `POST /web/subtask-update`
 - `POST /web/ingest`
 - `POST /web/task-update`
 - `POST /web/task-status`
@@ -161,6 +162,7 @@ V kanálu `#orchestrator`:
 - `dispatch`
 - `start <proposal_id>`
 - `done <proposal_id>`
+- `delete <proposal_id>`
 - `set-group <proposal_id> <GROUP>`
 - `comment <proposal_id> <TEXT>`
 - `set-role <proposal_id> <ROLE>`
@@ -174,6 +176,7 @@ V kanálu `#orchestrator`:
 V tematických kanálech:
 - `project <název projektu>` založí dlouhodobý projekt v dané roli
 - `task <popis úkolu>` založí úkol a naváže ho na aktivní projekt
+- `delete <proposal_id>` smaže omylem vytvořený úkol
 - běžná věta se automaticky uloží jako rychlý úkol (manual task)
 
 Bot drží jednoduchou per-channel paměť v `data/runtime/channel_memory.json`.
@@ -217,6 +220,7 @@ Web triage:
 - `/web/projects`: seznam dlouhodobých projektů (deadline/stav/počet napojených emailů).
 - `/web/project/{project_id}`: detail projektu + subtasky + napojené emaily.
 - v detailu projektu můžeš nastavit `status` a `deadline`.
+- subtask stavy: `todo`, `in_progress`, `submitted`, `needs_revision`, `done`
 - v kanálovém detailu:
   - vyber `Projekt` z dropdownu nebo vyplň `Nový projekt`
   - volitelně vyplň `Nový subtask`
