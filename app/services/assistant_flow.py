@@ -18,12 +18,13 @@ from app.services.classifier import classify_email
 from app.services.imap_client import fetch_active_message_keys, fetch_emails
 from app.services.planner import plan_task_slot
 from app.services.proposal_store import list_proposals, mark_missing_proposals, save_proposals, upsert_proposals
+from app.services.sync_state import record_sync_run
 
 
 NON_CALENDAR_ROLES = {"SPAM", "PHISHING", "NEWSLETTER"}
 
 
-def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapResponse:
+def ingest_and_create_proposals(payload: IngestImapRequest, trigger: str = "manual") -> IngestImapResponse:
     emails = fetch_emails(payload.accounts, payload.max_per_account)
     proposals: list[TaskProposal] = []
     now = datetime.utcnow()
@@ -72,7 +73,7 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
     active_message_keys = fetch_active_message_keys(payload.accounts)
     tracked_scopes = {(account.name, account.folder) for account in payload.accounts}
     removed_count = mark_missing_proposals(active_message_keys, tracked_scopes)
-    return IngestImapResponse(
+    result = IngestImapResponse(
         emails_count=len(emails),
         proposals_created=created_count,
         proposals_updated=updated_count,
@@ -80,6 +81,15 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
         new_proposal_ids=created_ids,
         proposals=proposals,
     )
+    record_sync_run(
+        trigger=trigger,
+        emails_count=result.emails_count,
+        proposals_created=result.proposals_created,
+        proposals_updated=result.proposals_updated,
+        proposals_removed=result.proposals_removed,
+        status="ok",
+    )
+    return result
 
 
 def approve_or_reject_proposal(proposal_id: str, payload: ApproveProposalRequest) -> TaskProposal:

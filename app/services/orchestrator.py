@@ -77,7 +77,7 @@ def _handle_orchestrator(content: str) -> str:
         return _format_pending()
     if cmd == "ingest":
         accounts = load_imap_accounts()
-        result = ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10))
+        result = ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10), trigger="discord")
         return _format_ingest_result(result)
     if cmd == "dispatch":
         return _dispatch_hint()

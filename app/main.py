@@ -31,6 +31,7 @@ from app.services.proposal_store import list_proposals, save_proposals
 from app.services.projects_store import add_subtask, create_project, list_projects, update_project_meta, update_subtask
 from app.services.roles import load_roles
 from app.services.sync_scheduler import start_sync_scheduler, stop_sync_scheduler
+from app.services.sync_state import load_sync_state
 from app.services.travel import estimate_travel
 
 
@@ -55,6 +56,7 @@ def root() -> RedirectResponse:
 def web_home() -> HTMLResponse:
     proposals = list_proposals()
     projects = list_projects()
+    sync_state = load_sync_state()
     removed_pending = [p for p in proposals if p.status == "pending" and not _is_active_source(p)]
     counts = {
         "pending": len([p for p in proposals if p.status == "pending" and _is_active_source(p)]),
@@ -84,7 +86,7 @@ def web_home() -> HTMLResponse:
             f"[{html.escape(item.status)} | P{item.priority}]<br>"
             f"{html.escape((item.subject or item.summary or '')[:110])}"
             "</li>"
-            for item in incoming_proposals[:30]
+            for item in incoming_proposals
         ]
     )
     opened_rows = "".join(
@@ -95,7 +97,7 @@ def web_home() -> HTMLResponse:
             f"[{html.escape(item.status)} | P{item.priority}]<br>"
             f"{html.escape((item.subject or item.summary or '')[:110])}"
             "</li>"
-            for item in opened_proposals[:30]
+            for item in opened_proposals
         ]
     )
 
@@ -120,7 +122,7 @@ def web_home() -> HTMLResponse:
                 f"<b>{html.escape(item.role)}</b> [feedback]<br>"
                 f"{html.escape((item.subject or item.summary or '')[:110])}"
                 "</li>"
-                for item in removed_pending[:20]
+                for item in removed_pending
             ]
         )
         + "</ul>"
@@ -134,6 +136,13 @@ def web_home() -> HTMLResponse:
         f"<p>Pending: <b>{counts['pending']}</b> | Approved: <b>{counts['approved']}</b> | "
         f"In progress: <b>{counts['in_progress']}</b> | Dispatched: <b>{counts['dispatched']}</b> | "
         f"Done: <b>{counts['done']}</b></p>"
+        f"<p>Poslední sync: <b>{html.escape(sync_state.get('last_run_at', '') or 'nikdy')}</b> | "
+        f"trigger: <b>{html.escape(sync_state.get('last_trigger', '') or '-')}</b> | "
+        f"stav: <b>{html.escape(sync_state.get('last_status', '') or '-')}</b></p>"
+        f"<p>Sync detail: emails={sync_state.get('last_emails_count', 0)}, "
+        f"new={sync_state.get('last_proposals_created', 0)}, "
+        f"updated={sync_state.get('last_proposals_updated', 0)}, "
+        f"removed={sync_state.get('last_proposals_removed', 0)}</p>"
         "<ul>"
         "<li><a href='/triage'>Ingest + Triage</a></li>"
         "<li><a href='/web/channels'>Jednotlivé kanály</a></li>"
@@ -141,15 +150,15 @@ def web_home() -> HTMLResponse:
         "<li><a href='/docs'>API Docs</a></li>"
         "</ul>"
         "</div>"
-        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
+        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px;max-height:70vh;overflow:auto'>"
         f"<h3 style='margin:0 0 8px 0'>Neotevřené ({len(incoming_proposals)})</h3>"
         f"{incoming_block}"
         "</div>"
-        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
+        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px;max-height:70vh;overflow:auto'>"
         f"<h3 style='margin:0 0 8px 0'>Rozpracované / čekající ({len(opened_proposals)})</h3>"
         f"{opened_block}"
         "</div>"
-        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
+        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px;max-height:70vh;overflow:auto'>"
         f"<h3 style='margin:0 0 8px 0'>Zmizelé ze zdroje ({len(removed_pending)})</h3>"
         f"{removed_block}"
         "</div>"
@@ -492,7 +501,7 @@ async def web_task_status(request: Request) -> RedirectResponse:
 @app.post("/web/ingest")
 def web_ingest() -> RedirectResponse:
     accounts = load_imap_accounts()
-    ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10))
+    ingest_and_create_proposals(IngestImapRequest(accounts=accounts, max_per_account=10), trigger="web")
     return RedirectResponse(url="/triage?msg=Ingest+hotov", status_code=303)
 
 
@@ -513,7 +522,7 @@ def plan_task_endpoint(payload: PlanTaskRequest) -> PlanTaskResponse:
 
 @app.post("/imap/ingest", response_model=IngestImapResponse)
 def ingest_imap_endpoint(payload: IngestImapRequest) -> IngestImapResponse:
-    return ingest_and_create_proposals(payload)
+    return ingest_and_create_proposals(payload, trigger="api")
 
 
 @app.get("/proposals/pending", response_model=ProposalListResponse)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from collections import defaultdict
 
 import discord
@@ -20,6 +21,7 @@ def build_client() -> discord.Client:
 
 
 client = build_client()
+logger = logging.getLogger(__name__)
 
 
 @client.event
@@ -98,22 +100,28 @@ async def _dispatch_to_channels(message: discord.Message) -> None:
 async def auto_dispatch_loop() -> None:
     grouped = _pending_notifications_by_channel()
     if not grouped:
+        logger.info("Discord auto-dispatch: no pending notifications")
         return
 
     guild = _resolve_target_guild()
     if guild is None:
+        logger.warning("Discord auto-dispatch: no guild resolved")
         return
 
     sent_ids: list[str] = []
     for channel_name, proposals in grouped.items():
         target = discord.utils.get(guild.text_channels, name=channel_name)
         if target is None:
+            logger.warning("Discord auto-dispatch: missing channel '%s'", channel_name)
             continue
         await target.send(_format_auto_dispatch_message(proposals))
         sent_ids.extend([item.id for item in proposals])
+        logger.info("Discord auto-dispatch: sent %s proposals to #%s", len(proposals), channel_name)
 
     if sent_ids:
         mark_discord_notified(sent_ids)
+    else:
+        logger.info("Discord auto-dispatch: nothing sent")
 
 
 @auto_dispatch_loop.before_loop
