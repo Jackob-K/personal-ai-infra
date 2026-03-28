@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from contextlib import asynccontextmanager
 from datetime import date
 
 from fastapi import FastAPI, HTTPException, Request
@@ -29,10 +30,20 @@ from app.services.planner import plan_task_slot
 from app.services.proposal_store import list_proposals, save_proposals
 from app.services.projects_store import add_subtask, create_project, list_projects, update_project_meta, update_subtask
 from app.services.roles import load_roles
+from app.services.sync_scheduler import start_sync_scheduler, stop_sync_scheduler
 from app.services.travel import estimate_travel
 
 
-app = FastAPI(title="AI Server", version="0.5.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    start_sync_scheduler()
+    try:
+        yield
+    finally:
+        stop_sync_scheduler()
+
+
+app = FastAPI(title="AI Server", version="0.5.0", lifespan=lifespan)
 
 
 @app.get("/")
@@ -44,14 +55,21 @@ def root() -> RedirectResponse:
 def web_home() -> HTMLResponse:
     proposals = list_proposals()
     projects = list_projects()
+    removed_pending = [p for p in proposals if p.status == "pending" and not _is_active_source(p)]
     counts = {
-        "pending": len([p for p in proposals if p.status == "pending"]),
+        "pending": len([p for p in proposals if p.status == "pending" and _is_active_source(p)]),
         "approved": len([p for p in proposals if p.status == "approved"]),
         "in_progress": len([p for p in proposals if p.status in {"in_progress", "submitted", "needs_revision"}]),
         "dispatched": len([p for p in proposals if p.status == "dispatched"]),
         "done": len([p for p in proposals if p.status == "done"]),
     }
-    incoming_proposals = [p for p in proposals if p.status in {"pending", "approved", "dispatched"} and p.role != "ORCHESTRATOR"]
+    incoming_proposals = [
+        p
+        for p in proposals
+        if p.status in {"pending", "approved", "dispatched"}
+        and p.role != "ORCHESTRATOR"
+        and (p.status != "pending" or _is_active_source(p))
+    ]
     opened_proposals = [
         p for p in proposals if p.status in {"in_progress", "submitted", "needs_revision"} and p.role != "ORCHESTRATOR"
     ]
@@ -91,6 +109,22 @@ def web_home() -> HTMLResponse:
         if not opened_proposals
         else f"<ul style='padding-left:18px;margin-top:8px'>{opened_rows}</ul>"
     )
+    removed_block = (
+        "<p>Žádné odložené návrhy.</p>"
+        if not removed_pending
+        else "<ul style='padding-left:18px;margin-top:8px'>"
+        + "".join(
+            [
+                "<li style='margin-bottom:6px'>"
+                f"<code>{html.escape(item.id[:8])}</code> "
+                f"<b>{html.escape(item.role)}</b> [feedback]<br>"
+                f"{html.escape((item.subject or item.summary or '')[:110])}"
+                "</li>"
+                for item in removed_pending[:20]
+            ]
+        )
+        + "</ul>"
+    )
 
     body = (
         "<h1>Home</h1>"
@@ -114,6 +148,10 @@ def web_home() -> HTMLResponse:
         "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
         f"<h3 style='margin:0 0 8px 0'>Rozpracované / čekající ({len(opened_proposals)})</h3>"
         f"{opened_block}"
+        "</div>"
+        "<div style='flex:1;min-width:320px;border:1px solid #ddd;border-radius:8px;padding:12px'>"
+        f"<h3 style='margin:0 0 8px 0'>Zmizelé ze zdroje ({len(removed_pending)})</h3>"
+        f"{removed_block}"
         "</div>"
         "</div>"
     )
@@ -168,6 +206,7 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
 
     rows: list[str] = []
     for item in items:
+        source_note = "removed" if not _is_active_source(item) else "active"
         rows.append(
             "<tr>"
             f"<td><code>{html.escape(item.id[:8])}</code></td>"
@@ -176,7 +215,7 @@ def web_channel_detail(channel_name: str, msg: str | None = None) -> HTMLRespons
             f"<td>{html.escape(item.sender or '')}</td>"
             f"<td>{html.escape(item.role)}</td>"
             f"<td>{html.escape(item.bundle_label or item.bundle_key or '')}</td>"
-            f"<td>{html.escape(item.handling)}</td>"
+            f"<td>{html.escape(item.handling)} / {source_note}</td>"
             f"<td>{html.escape(_project_name(projects, item.project_id))}</td>"
             f"<td>{html.escape(item.task_group or '')}</td>"
             f"<td>{html.escape((item.subject or item.summary or '')[:120])}</td>"
@@ -479,7 +518,7 @@ def ingest_imap_endpoint(payload: IngestImapRequest) -> IngestImapResponse:
 
 @app.get("/proposals/pending", response_model=ProposalListResponse)
 def pending_proposals_endpoint() -> ProposalListResponse:
-    pending = [item for item in list_proposals() if item.status == "pending"]
+    pending = [item for item in list_proposals() if item.status == "pending" and _is_active_source(item)]
     return ProposalListResponse(proposals=pending)
 
 
@@ -499,7 +538,9 @@ def travel_estimate_endpoint(payload: TravelEstimateRequest) -> TravelEstimateRe
 
 @app.get("/triage", response_class=HTMLResponse)
 def triage_page(msg: str | None = None) -> HTMLResponse:
-    pending = [item for item in list_proposals() if item.status == "pending"]
+    proposals = list_proposals()
+    pending = [item for item in proposals if item.status == "pending" and _is_active_source(item)]
+    removed_pending = [item for item in proposals if item.status == "pending" and not _is_active_source(item)]
     roles = sorted(load_roles().keys())
 
     notice = f"<p style='color:#0b5'>{html.escape(msg)}</p>" if msg else ""
@@ -534,23 +575,40 @@ def triage_page(msg: str | None = None) -> HTMLResponse:
             "</tr>"
         )
 
-    body = (
-        "<h1>Triage Inbox</h1>"
-        f"{notice}"
-        "<form method='post' action='/web/ingest'><button type='submit'>Spustit ingest</button></form>"
-        "<p>Uprav roli/prioritu a potvrď. SPAM/PHISHING/NEWSLETTER se po schválení neplánují do kalendáře.</p>"
-        "<form method='post' action='/triage/submit'>"
-        "<table border='1' cellpadding='6' cellspacing='0'>"
-        "<thead><tr><th>ID</th><th>Odesílatel</th><th>Role</th><th>P</th><th>Náhled</th><th>Akce</th></tr></thead>"
-        "<tbody>"
-        + "".join(rows)
-        + "</tbody></table>"
-        "<p style='margin-top:14px'>"
-        "<button type='submit' name='action' value='save_all_continue'>Pokračuj (uloží vše)</button>"
-        " "
-        "<button type='submit' name='action' value='save_all_approve'>Uložit + Schválit vše</button>"
-        "</p>"
-        "</form>"
+    body = "".join(
+        [
+            "<h1>Triage Inbox</h1>",
+            notice,
+            "<form method='post' action='/web/ingest'><button type='submit'>Spustit ingest</button></form>",
+            "<p>Uprav roli/prioritu a potvrď. SPAM/PHISHING/NEWSLETTER se po schválení neplánují do kalendáře.</p>",
+            "<form method='post' action='/triage/submit'>",
+            "<table border='1' cellpadding='6' cellspacing='0'>",
+            "<thead><tr><th>ID</th><th>Odesílatel</th><th>Role</th><th>P</th><th>Náhled</th><th>Akce</th></tr></thead>",
+            "<tbody>",
+            "".join(rows),
+            "</tbody></table>",
+            (
+                ""
+                if not removed_pending
+                else "<h3 style='margin-top:18px'>Odstraněné ze schránky, ponechané pro feedback</h3><ul>"
+                + "".join(
+                    [
+                        "<li>"
+                        f"<code>{html.escape(item.id[:8])}</code> {html.escape(item.role)}: "
+                        f"{html.escape((item.subject or item.summary or '')[:120])}"
+                        "</li>"
+                        for item in removed_pending[:20]
+                    ]
+                )
+                + "</ul>"
+            ),
+            "<p style='margin-top:14px'>",
+            "<button type='submit' name='action' value='save_all_continue'>Pokračuj (uloží vše)</button>",
+            " ",
+            "<button type='submit' name='action' value='save_all_approve'>Uložit + Schválit vše</button>",
+            "</p>",
+            "</form>",
+        ]
     )
     return HTMLResponse(_page(body, active="triage"))
 
@@ -563,14 +621,14 @@ async def triage_submit(request: Request) -> RedirectResponse:
     allowed_roles = set(load_roles().keys())
 
     if action == "save_all_continue":
-        pending = [item for item in proposals if item.status == "pending"]
+        pending = [item for item in proposals if item.status == "pending" and _is_active_source(item)]
         for proposal in pending:
             _apply_row_changes(form, proposal, allowed_roles)
         save_proposals(proposals)
         return RedirectResponse(url="/triage?msg=Vse+ulozeno,+pokracuj", status_code=303)
 
     if action == "save_all_approve":
-        pending = [item for item in proposals if item.status == "pending"]
+        pending = [item for item in proposals if item.status == "pending" and _is_active_source(item)]
         for proposal in pending:
             ok, error = _apply_row_changes(form, proposal, allowed_roles)
             if not ok:
@@ -732,3 +790,7 @@ def _page(body: str, active: str = "home") -> str:
 
 def _tab_style(is_active: bool) -> str:
     return "font-weight:bold;text-decoration:underline;" if is_active else "text-decoration:none;"
+
+
+def _is_active_source(proposal) -> bool:
+    return getattr(proposal, "source_status", "active") == "active"

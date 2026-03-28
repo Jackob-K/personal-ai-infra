@@ -55,7 +55,7 @@ class InboxAccountConfig(BaseModel):
     password: str | None = None
     password_env: str | None = None
     folder: str = "INBOX"
-    unseen_only: bool = True
+    unseen_only: bool = False
 
 
 class IngestImapRequest(BaseModel):
@@ -66,6 +66,10 @@ class IngestImapRequest(BaseModel):
 class RawEmailMessage(BaseModel):
     account_name: str
     message_id: str
+    folder: str = "INBOX"
+    imap_uid: str = ""
+    source_message_id: str | None = None
+    stable_key: str = ""
     sender: str
     subject: str
     body: str
@@ -87,6 +91,15 @@ class TaskProposal(BaseModel):
     ] = "pending"
     account_name: str
     message_id: str
+    source_folder: str = "INBOX"
+    source_imap_uid: str | None = None
+    source_message_id: str | None = None
+    source_message_key: str | None = None
+    source_status: Literal["active", "removed"] = "active"
+    source_last_seen_at: datetime | None = None
+    source_removed_at: datetime | None = None
+    source_removed_while_pending: bool = False
+    discord_notified_at: datetime | None = None
     sender: str
     subject: str
     source_excerpt: str = ""
@@ -112,6 +125,8 @@ class IngestImapResponse(BaseModel):
     emails_count: int
     proposals_created: int
     proposals_updated: int = 0
+    proposals_removed: int = 0
+    proposals_reactivated: int = 0
     new_proposal_ids: list[str] = Field(default_factory=list)
     proposals: list[TaskProposal]
 

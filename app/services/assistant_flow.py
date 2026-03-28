@@ -15,9 +15,9 @@ from app.models import (
 )
 from app.services.caldav_client import create_calendar_event
 from app.services.classifier import classify_email
-from app.services.imap_client import fetch_emails
+from app.services.imap_client import fetch_active_message_keys, fetch_emails
 from app.services.planner import plan_task_slot
-from app.services.proposal_store import list_proposals, save_proposals, upsert_proposals
+from app.services.proposal_store import list_proposals, mark_missing_proposals, save_proposals, upsert_proposals
 
 
 NON_CALENDAR_ROLES = {"SPAM", "PHISHING", "NEWSLETTER"}
@@ -26,6 +26,7 @@ NON_CALENDAR_ROLES = {"SPAM", "PHISHING", "NEWSLETTER"}
 def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapResponse:
     emails = fetch_emails(payload.accounts, payload.max_per_account)
     proposals: list[TaskProposal] = []
+    now = datetime.utcnow()
 
     for message in emails:
         classified = classify_email(
@@ -43,9 +44,15 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
         proposals.append(
             TaskProposal(
                 id=str(uuid4()),
-                created_at=datetime.utcnow(),
+                created_at=now,
                 account_name=message.account_name,
                 message_id=message.message_id,
+                source_folder=message.folder,
+                source_imap_uid=message.imap_uid,
+                source_message_id=message.source_message_id,
+                source_message_key=message.stable_key,
+                source_status="active",
+                source_last_seen_at=now,
                 sender=message.sender,
                 subject=message.subject,
                 source_excerpt=message.body[:320],
@@ -62,10 +69,14 @@ def ingest_and_create_proposals(payload: IngestImapRequest) -> IngestImapRespons
         )
 
     created_count, updated_count, created_ids = upsert_proposals(proposals)
+    active_message_keys = fetch_active_message_keys(payload.accounts)
+    tracked_scopes = {(account.name, account.folder) for account in payload.accounts}
+    removed_count = mark_missing_proposals(active_message_keys, tracked_scopes)
     return IngestImapResponse(
         emails_count=len(emails),
         proposals_created=created_count,
         proposals_updated=updated_count,
+        proposals_removed=removed_count,
         new_proposal_ids=created_ids,
         proposals=proposals,
     )

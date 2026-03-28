@@ -286,6 +286,7 @@ def _format_pending(role_filter: str | None = None) -> str:
         item
         for item in list_proposals()
         if item.status in {"pending", "approved", "in_progress", "submitted", "needs_revision"}
+        and (item.status != "pending" or _is_active_source(item))
     ]
     if role_filter:
         role_filter = _normalize_role(role_filter)
@@ -301,6 +302,7 @@ def _format_triage() -> str:
         item
         for item in list_proposals()
         if item.status in {"pending", "approved", "in_progress", "submitted", "needs_revision"}
+        and (item.status != "pending" or _is_active_source(item))
     ]
     if not pending:
         return "Triage fronta je prázdná."
@@ -432,6 +434,7 @@ def _format_ingest_result(result: IngestImapResponse) -> str:
         item
         for item in list_proposals()
         if item.status in {"pending", "approved", "in_progress", "submitted", "needs_revision"}
+        and (item.status != "pending" or _is_active_source(item))
     ]
     new_items = [item for item in result.proposals if item.id in set(result.new_proposal_ids)]
     lines = [
@@ -439,6 +442,7 @@ def _format_ingest_result(result: IngestImapResponse) -> str:
         f"Načteno emailů: {result.emails_count}.",
         f"Nové návrhy: {result.proposals_created}.",
         f"Již známé nezpracované návrhy znovu nalezeny: {result.proposals_updated}.",
+        f"Zmizelé ze schránky, ponechané pro feedback: {result.proposals_removed}.",
     ]
 
     if new_items:
@@ -462,6 +466,10 @@ def _format_ingest_result(result: IngestImapResponse) -> str:
         lines.append(f"Uprav na webu: {triage_url}")
 
     return "\n".join(lines)
+
+
+def _is_active_source(proposal: TaskProposal) -> bool:
+    return proposal.source_status == "active"
 
 
 def _proposal_lines(items: list[TaskProposal]) -> list[str]:

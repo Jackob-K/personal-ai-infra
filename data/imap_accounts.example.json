@@ -7,7 +7,7 @@
       "username": "you@post.cz",
       "password_env": "IMAP_POST_PASSWORD",
       "folder": "INBOX",
-      "unseen_only": true
+      "unseen_only": false
     },
     {
       "name": "tul",
@@ -16,7 +16,7 @@
       "username": "jmeno.prijmeni@tul.cz",
       "password_env": "IMAP_TUL_PASSWORD",
       "folder": "INBOX",
-      "unseen_only": true
+      "unseen_only": false
     }
   ]
 }
