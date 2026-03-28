@@ -70,8 +70,8 @@ def _is_sync_enabled() -> bool:
 
 
 def _max_per_account() -> int:
-    raw = os.getenv("IMAP_SYNC_MAX_PER_ACCOUNT", "200").strip()
+    raw = os.getenv("IMAP_SYNC_MAX_PER_ACCOUNT", "100").strip()
     try:
-        return max(1, min(1000, int(raw)))
+        return max(1, min(100, int(raw)))
     except ValueError:
-        return 200
+        return 100
