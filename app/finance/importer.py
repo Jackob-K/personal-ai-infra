@@ -112,7 +112,8 @@ def _normalize_header(value: str) -> str:
 
 
 def _normalize_amount(value: str) -> float:
-    text = (value or "").strip().replace(" ", "")
+    text = (value or "").strip()
+    text = text.replace(" ", "").replace("\u00a0", "").replace("\u202f", "")
     if not text:
         return 0.0
     if "," in text and "." in text:
