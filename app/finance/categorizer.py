@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 
+from app.finance.email_matcher import match_transaction_emails, suggest_description
 from app.finance.models import CategorizedTransaction, CategorySuggestion, FinanceTransaction, TrainingExample
 
 
@@ -10,10 +11,18 @@ def categorize_transactions(
     transactions: list[FinanceTransaction],
     training_examples: list[TrainingExample],
 ) -> list[CategorizedTransaction]:
-    return [
-        CategorizedTransaction(transaction=item, suggestion=suggest_category(item, training_examples))
-        for item in transactions
-    ]
+    categorized: list[CategorizedTransaction] = []
+    for item in transactions:
+        email_match = match_transaction_emails(item)
+        item.description = suggest_description(item, email_match)
+        categorized.append(
+            CategorizedTransaction(
+                transaction=item,
+                suggestion=suggest_category(item, training_examples),
+                email_match=email_match,
+            )
+        )
+    return categorized
 
 
 def suggest_category(

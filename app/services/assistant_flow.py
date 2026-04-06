@@ -60,6 +60,7 @@ def ingest_and_create_proposals(payload: IngestImapRequest, trigger: str = "manu
                 source_message_key=message.stable_key,
                 source_status="active",
                 source_last_seen_at=now,
+                source_received_at=message.received_at,
                 sender=message.sender,
                 subject=message.subject,
                 source_excerpt=message.body[:320],

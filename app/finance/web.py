@@ -21,7 +21,7 @@ def render_finance_page(
         if not preview_rows
         else "<table border='1' cellpadding='6' cellspacing='0'>"
         "<thead><tr><th>Řádek</th><th>Datum</th><th>Protistrana</th><th>Částka</th><th>Účet protistrany</th>"
-        "<th>Navržená kategorie</th><th>Confidence</th><th>Důvod</th><th>Původní kategorie</th></tr></thead>"
+        "<th>Popis</th><th>Napárovaný email</th><th>Navržená kategorie</th><th>Confidence</th><th>Důvod</th><th>Původní kategorie</th></tr></thead>"
         f"<tbody>{rows}</tbody></table>"
     )
 
@@ -59,8 +59,18 @@ def render_finance_page(
 
 def _render_row(item: dict) -> str:
     suggestion = item.get("suggestion") or {}
+    email_match = item.get("email_match") or {}
     amount = item.get("amount", 0)
     amount_text = f"{float(amount):,.2f}".replace(",", " ").replace(".", ",")
+    source_row = int(item.get("source_row", 0))
+    email_block = ""
+    if email_match:
+        email_block = (
+            f"<div><b>{html.escape(str(email_match.get('subject', '')))}</b></div>"
+            f"<div style='color:#555'>{html.escape(str(email_match.get('sender', '')))}</div>"
+            f"<div style='color:#555'>confidence {html.escape(str(email_match.get('confidence', '')))} | "
+            f"{html.escape(str(email_match.get('reason', '')))}</div>"
+        )
     return (
         "<tr>"
         f"<td>{html.escape(str(item.get('source_row', '')))}</td>"
@@ -68,6 +78,14 @@ def _render_row(item: dict) -> str:
         f"<td>{html.escape(str(item.get('counterparty', '')))}</td>"
         f"<td>{html.escape(amount_text)} {html.escape(str(item.get('currency', 'CZK')))}</td>"
         f"<td>{html.escape(str(item.get('counterparty_account', '')))}</td>"
+        "<td>"
+        "<form method='post' action='/finance/preview/update'>"
+        f"<input type='hidden' name='source_row' value='{source_row}'>"
+        f"<input type='text' name='description' value='{html.escape(str(item.get('description', '')))}' style='width:260px'> "
+        "<button type='submit'>Uložit</button>"
+        "</form>"
+        "</td>"
+        f"<td>{email_block}</td>"
         f"<td>{html.escape(str(suggestion.get('category', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('confidence', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('reason', '')))}"

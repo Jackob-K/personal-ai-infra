@@ -37,6 +37,7 @@ def save_preview(transactions: list[CategorizedTransaction]) -> None:
     for item in transactions:
         row = asdict(item.transaction)
         row["suggestion"] = asdict(item.suggestion) if item.suggestion else None
+        row["email_match"] = asdict(item.email_match) if item.email_match else None
         rows.append(row)
     _write_json(FINANCE_PREVIEW_PATH, rows)
 
@@ -44,6 +45,20 @@ def save_preview(transactions: list[CategorizedTransaction]) -> None:
 def load_preview() -> list[dict]:
     payload = _load_json(FINANCE_PREVIEW_PATH, default=[])
     return [item for item in payload if isinstance(item, dict)]
+
+
+def update_preview_description(source_row: int, description: str) -> bool:
+    rows = load_preview()
+    changed = False
+    for item in rows:
+        if int(item.get("source_row", -1)) != source_row:
+            continue
+        item["description"] = description
+        changed = True
+        break
+    if changed:
+        _write_json(FINANCE_PREVIEW_PATH, rows)
+    return changed
 
 
 def _training_key(item: TrainingExample) -> str:

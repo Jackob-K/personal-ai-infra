@@ -14,6 +14,7 @@ class FinanceTransaction:
     own_account: str
     note: str
     raw_category: str
+    description: str = ""
 
 
 @dataclass(slots=True)
@@ -28,6 +29,7 @@ class CategorySuggestion:
 class CategorizedTransaction:
     transaction: FinanceTransaction
     suggestion: CategorySuggestion | None
+    email_match: "EmailMatch" | None = None
 
 
 @dataclass(slots=True)
@@ -40,3 +42,13 @@ class TrainingExample:
     own_account: str
     note: str
     category: str
+
+
+@dataclass(slots=True)
+class EmailMatch:
+    proposal_id: str
+    received_at: str
+    sender: str
+    subject: str
+    confidence: float
+    reason: str

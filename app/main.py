@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.finance.categorizer import categorize_transactions
 from app.finance.importer import extract_training_examples, parse_transactions
-from app.finance.store import load_preview, load_training_examples, merge_training_examples, save_preview
+from app.finance.store import load_preview, load_training_examples, merge_training_examples, save_preview, update_preview_description
 from app.finance.web import render_finance_page
 from app.models import (
     ApproveProposalRequest,
@@ -569,6 +569,20 @@ async def finance_preview(request: Request) -> RedirectResponse:
     if added:
         message += f",+ulozeno+{added}+novych+trenovacich+prikladu"
     return RedirectResponse(url=f"/finance?msg={quote_plus(message.replace('+', ' '))}", status_code=303)
+
+
+@app.post("/finance/preview/update")
+async def finance_preview_update(request: Request) -> RedirectResponse:
+    form = await request.form()
+    source_row_raw = str(form.get("source_row", "")).strip()
+    description = str(form.get("description", "")).strip()
+    try:
+        source_row = int(source_row_raw)
+    except ValueError:
+        return RedirectResponse(url="/finance?error=Neplatny+radek+pro+upravu", status_code=303)
+    if not update_preview_description(source_row, description):
+        return RedirectResponse(url="/finance?error=Radek+nenalezen", status_code=303)
+    return RedirectResponse(url="/finance?msg=Popis+ulozen", status_code=303)
 
 
 @app.post("/classify-email", response_model=ClassifyEmailResponse)
