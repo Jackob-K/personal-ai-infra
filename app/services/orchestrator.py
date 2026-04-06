@@ -11,7 +11,7 @@ from app.services.assistant_flow import approve_or_reject_proposal, ingest_and_c
 from app.services.channel_memory import append_message, get_recent_messages
 from app.services.feedback import record_feedback
 from app.services.imap_accounts import load_imap_accounts
-from app.services.proposal_store import delete_proposal, list_proposals, save_proposals
+from app.services.proposal_store import delete_proposal, list_proposals, reset_discord_notification, save_proposals
 from app.services.projects_store import add_subtask, create_project, list_projects, remove_subtask
 from app.services.roles import get_role_config, load_roles
 
@@ -341,7 +341,9 @@ def _set_role_command(content: str) -> str:
         return f"Proposal '{proposal_id}' not found"
 
     role_cfg = load_roles().get(role, {})
-    proposal.role = role
+    if proposal.role != role:
+        proposal.role = role
+        reset_discord_notification(proposal)
     if isinstance(role_cfg.get("priority"), int):
         proposal.priority = int(role_cfg["priority"])
     if isinstance(role_cfg.get("default_duration_minutes"), int):

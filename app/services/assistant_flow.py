@@ -17,7 +17,13 @@ from app.services.caldav_client import create_calendar_event
 from app.services.classifier import classify_email
 from app.services.imap_client import fetch_active_message_keys, fetch_emails
 from app.services.planner import plan_task_slot
-from app.services.proposal_store import list_proposals, mark_missing_proposals, save_proposals, upsert_proposals
+from app.services.proposal_store import (
+    list_proposals,
+    mark_missing_proposals,
+    reset_discord_notification,
+    save_proposals,
+    upsert_proposals,
+)
 from app.services.sync_state import record_sync_run
 
 
@@ -105,7 +111,9 @@ def approve_or_reject_proposal(proposal_id: str, payload: ApproveProposalRequest
 
     proposal.status = "approved"
     if payload.role:
-        proposal.role = payload.role
+        if proposal.role != payload.role:
+            proposal.role = payload.role
+            reset_discord_notification(proposal)
     if payload.priority:
         proposal.priority = payload.priority
     if payload.duration_minutes:

@@ -3,10 +3,15 @@ from __future__ import annotations
 import html
 from contextlib import asynccontextmanager
 from datetime import date
+from urllib.parse import quote_plus
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.finance.categorizer import categorize_transactions
+from app.finance.importer import extract_training_examples, parse_transactions
+from app.finance.store import load_preview, load_training_examples, merge_training_examples, save_preview
+from app.finance.web import render_finance_page
 from app.models import (
     ApproveProposalRequest,
     ApproveProposalResponse,
@@ -27,7 +32,7 @@ from app.services.feedback import record_feedback
 from app.services.imap_accounts import load_imap_accounts
 from app.services.orchestrator import update_proposal_status
 from app.services.planner import plan_task_slot
-from app.services.proposal_store import list_proposals, save_proposals
+from app.services.proposal_store import list_proposals, reset_discord_notification, save_proposals
 from app.services.projects_store import add_subtask, create_project, list_projects, update_project_meta, update_subtask
 from app.services.roles import load_roles
 from app.services.sync_scheduler import start_sync_scheduler, stop_sync_scheduler
@@ -84,6 +89,7 @@ def web_home() -> HTMLResponse:
             f"<code>{html.escape(item.id[:8])}</code> "
             f"<b>{html.escape(item.role)}</b> "
             f"[{html.escape(item.status)} | P{item.priority}]<br>"
+            f"<span style='color:#555'>{html.escape((item.sender or '')[:90])}</span><br>"
             f"{html.escape((item.subject or item.summary or '')[:110])}"
             "</li>"
             for item in incoming_proposals
@@ -95,6 +101,7 @@ def web_home() -> HTMLResponse:
             f"<code>{html.escape(item.id[:8])}</code> "
             f"<b>{html.escape(item.role)}</b> "
             f"[{html.escape(item.status)} | P{item.priority}]<br>"
+            f"<span style='color:#555'>{html.escape((item.sender or '')[:90])}</span><br>"
             f"{html.escape((item.subject or item.summary or '')[:110])}"
             "</li>"
             for item in opened_proposals
@@ -120,6 +127,7 @@ def web_home() -> HTMLResponse:
                 "<li style='margin-bottom:6px'>"
                 f"<code>{html.escape(item.id[:8])}</code> "
                 f"<b>{html.escape(item.role)}</b> [feedback]<br>"
+                f"<span style='color:#555'>{html.escape((item.sender or '')[:90])}</span><br>"
                 f"{html.escape((item.subject or item.summary or '')[:110])}"
                 "</li>"
                 for item in removed_pending
@@ -145,6 +153,7 @@ def web_home() -> HTMLResponse:
         f"removed={sync_state.get('last_proposals_removed', 0)}</p>"
         "<ul>"
         "<li><a href='/triage'>Ingest + Triage</a></li>"
+        "<li><a href='/finance'>Finance</a></li>"
         "<li><a href='/web/channels'>Jednotlivé kanály</a></li>"
         f"<li><a href='/web/projects'>Projekty</a> ({len(projects)})</li>"
         "<li><a href='/docs'>API Docs</a></li>"
@@ -288,7 +297,9 @@ async def web_task_update(request: Request) -> RedirectResponse:
     if role:
         if role not in allowed_roles:
             return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Neplatna+role", status_code=303)
-        proposal.role = role
+        if proposal.role != role:
+            proposal.role = role
+            reset_discord_notification(proposal)
     if handling:
         if handling not in allowed_handling:
             return RedirectResponse(url=f"/web/channel/{channel_name}?msg=Neplatny+handling", status_code=303)
@@ -510,6 +521,56 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/finance", response_class=HTMLResponse)
+def finance_page(msg: str | None = None, error: str | None = None) -> HTMLResponse:
+    preview_rows = load_preview()
+    training_count = len(load_training_examples())
+    body = render_finance_page(
+        preview_rows=preview_rows,
+        training_count=training_count,
+        last_import_count=len(preview_rows),
+        message=msg,
+        error=error,
+    )
+    return HTMLResponse(_page(body, active="finance"))
+
+
+@app.post("/finance/preview")
+async def finance_preview(request: Request) -> RedirectResponse:
+    form = await request.form()
+    upload = form.get("statement")
+    csv_text = str(form.get("csv_text", "")).strip()
+    save_training = str(form.get("save_training", "")).strip() == "1"
+
+    content = csv_text
+    if upload and getattr(upload, "filename", ""):
+        raw = await upload.read()
+        content = raw.decode("utf-8-sig")
+
+    if not content.strip():
+        return RedirectResponse(url="/finance?error=Chybi+CSV+soubor+nebo+vlozeny+text", status_code=303)
+
+    try:
+        transactions = parse_transactions(content)
+    except ValueError as exc:
+        return RedirectResponse(url=f"/finance?error={quote_plus(str(exc))}", status_code=303)
+
+    training_examples = load_training_examples()
+    imported_examples = extract_training_examples(transactions) if save_training else []
+    all_examples = training_examples + imported_examples
+    categorized = categorize_transactions(transactions, all_examples)
+    save_preview(categorized)
+
+    added = 0
+    if imported_examples:
+        added = merge_training_examples(imported_examples)
+
+    message = f"Nacteno+{len(transactions)}+transakci"
+    if added:
+        message += f",+ulozeno+{added}+novych+trenovacich+prikladu"
+    return RedirectResponse(url=f"/finance?msg={quote_plus(message.replace('+', ' '))}", status_code=303)
+
+
 @app.post("/classify-email", response_model=ClassifyEmailResponse)
 def classify_email_endpoint(payload: EmailClassifyRequest) -> ClassifyEmailResponse:
     return classify_email(payload)
@@ -693,7 +754,9 @@ def _apply_row_changes(form, proposal, allowed_roles: set[str]) -> tuple[bool, s
     except (TypeError, ValueError):
         return False, "Neplatna+priorita"
 
-    proposal.role = role_raw
+    if proposal.role != role_raw:
+        proposal.role = role_raw
+        reset_discord_notification(proposal)
     proposal.priority = max(1, min(5, priority))
     record_feedback(
         proposal.sender,
@@ -781,6 +844,7 @@ def _page(body: str, active: str = "home") -> str:
         "<nav style='margin-bottom:14px'>"
         f"<a href='/web' style='margin-right:12px;{_tab_style(active == 'home')}'>Home</a>"
         f"<a href='/triage' style='margin-right:12px;{_tab_style(active == 'triage')}'>Ingest + Triage</a>"
+        f"<a href='/finance' style='margin-right:12px;{_tab_style(active == 'finance')}'>Finance</a>"
         f"<a href='/web/channels' style='margin-right:12px;{_tab_style(active == 'channels')}'>Jednotlivé kanály</a>"
         f"<a href='/web/projects' style='{_tab_style(active == 'projects')}'>Projekty</a>"
         "</nav>"

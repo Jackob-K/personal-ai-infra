@@ -58,7 +58,6 @@ async def _dispatch_to_channels(message: discord.Message) -> None:
         await message.channel.send("Není co dispatchovat. Schval nejdřív položky přes approve / web triage.")
         return
 
-    sent_ids: list[str] = []
     sent_channels = 0
     missing_channels: list[str] = []
 
@@ -82,11 +81,13 @@ async def _dispatch_to_channels(message: discord.Message) -> None:
             lines.append(
                 f"- `{item.id[:8]}` | {item.role} | P{item.priority} | {item.sender} | {bundle} | zpráv: {count}"
             )
-            sent_ids.extend([p.id for p in bucket])
 
         await target.send("\n".join(lines))
+        proposal_ids = [item.id for item in proposals]
+        mark_discord_notified(proposal_ids, channel_name)
         sent_channels += 1
 
+    sent_ids = [item.id for proposals in grouped.values() for item in proposals]
     if sent_ids:
         mark_dispatched(sent_ids)
 
@@ -108,18 +109,19 @@ async def auto_dispatch_loop() -> None:
         logger.warning("Discord auto-dispatch: no guild resolved")
         return
 
-    sent_ids: list[str] = []
+    sent_by_channel: dict[str, list[str]] = {}
     for channel_name, proposals in grouped.items():
         target = discord.utils.get(guild.text_channels, name=channel_name)
         if target is None:
             logger.warning("Discord auto-dispatch: missing channel '%s'", channel_name)
             continue
         await target.send(_format_auto_dispatch_message(proposals))
-        sent_ids.extend([item.id for item in proposals])
+        sent_by_channel[channel_name] = [item.id for item in proposals]
         logger.info("Discord auto-dispatch: sent %s proposals to #%s", len(proposals), channel_name)
 
-    if sent_ids:
-        mark_discord_notified(sent_ids)
+    if sent_by_channel:
+        for channel_name, proposal_ids in sent_by_channel.items():
+            mark_discord_notified(proposal_ids, channel_name)
     else:
         logger.info("Discord auto-dispatch: nothing sent")
 

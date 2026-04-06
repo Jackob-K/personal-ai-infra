@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 data/runtime/*.json
 !data/runtime/.gitkeep
+data/runtime/finance/
+data/runtime/users/
+uploads/

@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.models import TaskProposal
+from app.services.agent_registry import find_role_channel
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -38,13 +39,17 @@ def list_removed_pending_proposals() -> list[TaskProposal]:
 
 
 def list_pending_discord_notifications() -> list[TaskProposal]:
-    return [
-        item
-        for item in list_proposals()
-        if item.discord_notified_at is None
-        and item.source_status == "active"
-        and item.status in {"pending", "approved"}
-    ]
+    pending: list[TaskProposal] = []
+    for item in list_proposals():
+        if item.source_status != "active" or item.status not in {"pending", "approved"}:
+            continue
+        target_channel = find_role_channel(item.role)
+        if not target_channel:
+            continue
+        if item.discord_notified_channel == target_channel and item.discord_notified_at is not None:
+            continue
+        pending.append(item)
+    return pending
 
 
 def save_proposals(proposals: list[TaskProposal]) -> None:
@@ -124,7 +129,7 @@ def delete_proposal(proposal_id: str) -> TaskProposal | None:
     return deleted
 
 
-def mark_discord_notified(proposal_ids: list[str]) -> None:
+def mark_discord_notified(proposal_ids: list[str], channel_name: str) -> None:
     proposals = list_proposals()
     changed = False
     now = datetime.utcnow()
@@ -132,12 +137,18 @@ def mark_discord_notified(proposal_ids: list[str]) -> None:
     for item in proposals:
         if item.id not in target:
             continue
-        if item.discord_notified_at is not None:
+        if item.discord_notified_channel == channel_name and item.discord_notified_at is not None:
             continue
         item.discord_notified_at = now
+        item.discord_notified_channel = channel_name
         changed = True
     if changed:
         save_proposals(proposals)
+
+
+def reset_discord_notification(proposal: TaskProposal) -> None:
+    proposal.discord_notified_at = None
+    proposal.discord_notified_channel = None
 
 
 def _proposal_lookup_key(proposal: TaskProposal) -> str:

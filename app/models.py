@@ -100,6 +100,7 @@ class TaskProposal(BaseModel):
     source_removed_at: datetime | None = None
     source_removed_while_pending: bool = False
     discord_notified_at: datetime | None = None
+    discord_notified_channel: str | None = None
     sender: str
     subject: str
     source_excerpt: str = ""
