@@ -603,11 +603,23 @@ async def finance_month_save(request: Request) -> RedirectResponse:
     if not month_id:
         return RedirectResponse(url="/finance?error=Chybi+mesic", status_code=303)
     updates: dict[str, dict[str, str]] = {}
-    transaction_ids = [str(item).strip() for item in form.getlist("transaction_id") if str(item).strip()]
-    for transaction_id in transaction_ids:
+    preview_rows = load_preview()
+    snapshots = load_month_snapshots()
+    month_rows = [item for item in preview_rows if _month_key(item) == month_id]
+    if not month_rows and month_id in snapshots:
+        month_rows = list(snapshots[month_id].get("rows", []))
+    for item in month_rows:
+        transaction_id = str(item.get("transaction_id", "")).strip()
+        if not transaction_id:
+            continue
         updates[transaction_id] = {
-            "description": str(form.get(f"description__{transaction_id}", "")).strip(),
-            "selected_category": str(form.get(f"selected_category__{transaction_id}", "")).strip(),
+            "description": str(form.get(f"description__{transaction_id}", item.get("description", ""))).strip(),
+            "selected_category": str(
+                form.get(
+                    f"selected_category__{transaction_id}",
+                    item.get("selected_category", "") or (item.get("suggestion") or {}).get("category", "") or item.get("raw_category", ""),
+                )
+            ).strip(),
         }
     changed = save_month_edits(month_id, updates)
     return RedirectResponse(

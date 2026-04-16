@@ -132,7 +132,6 @@ def _render_row(item: dict, category_options: list[str]) -> str:
             email_block += "</ul>"
     return (
         "<tr>"
-        f"<input type='hidden' name='transaction_id' value='{html.escape(transaction_id)}'>"
         f"<td>{html.escape(str(item.get('source_row', '')))}</td>"
         f"<td><code>{html.escape(transaction_id[:8])}</code></td>"
         f"<td>{html.escape(str(item.get('booking_date', '')))}</td>"
