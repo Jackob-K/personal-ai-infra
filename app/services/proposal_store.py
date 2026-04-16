@@ -105,7 +105,14 @@ def mark_missing_proposals(active_message_keys: set[str], tracked_scopes: set[tu
         if scope not in tracked_scopes:
             continue
         message_key = proposal.source_message_key or _legacy_message_key(proposal)
-        if not message_key or message_key in active_message_keys:
+        if not message_key:
+            continue
+        if message_key in active_message_keys:
+            if proposal.source_status == "removed":
+                proposal.source_status = "active"
+                proposal.source_removed_at = None
+                proposal.source_removed_while_pending = False
+                changed += 1
             continue
         if proposal.source_status == "removed":
             continue
