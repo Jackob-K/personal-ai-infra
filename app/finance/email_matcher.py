@@ -6,6 +6,8 @@ from datetime import date, datetime
 from app.finance.models import CategorizedTransaction, EmailMatch, FinanceTransaction
 from app.services.proposal_store import list_proposals
 
+MAX_EMAIL_MATCH_DAYS = 45
+
 
 def match_transaction_emails(transaction: FinanceTransaction) -> EmailMatch | None:
     tx_date = _parse_iso_date(transaction.booking_date)
@@ -19,7 +21,7 @@ def match_transaction_emails(transaction: FinanceTransaction) -> EmailMatch | No
         received_dt = proposal.source_received_at or proposal.created_at
         if tx_date and received_dt:
             delta_days = abs((received_dt.date() - tx_date).days)
-            if delta_days > 7:
+            if delta_days > MAX_EMAIL_MATCH_DAYS:
                 continue
         else:
             delta_days = 999

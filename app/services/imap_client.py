@@ -23,7 +23,9 @@ def fetch_active_message_keys(accounts: list[InboxAccountConfig]) -> set[str]:
             with imaplib.IMAP4_SSL(account.host, account.port) as client:
                 client.login(account.username, password)
                 client.select(account.folder, readonly=True)
-                ids = _search_uids(client, account.unseen_only)
+                # Existence check must scan the whole selected folder, not just the ingest subset.
+                # Otherwise read emails can be incorrectly marked as "removed from source".
+                ids = _search_uids(client, False)
                 for imap_uid in ids:
                     status, fetched = client.uid(
                         "FETCH",
@@ -94,7 +96,13 @@ def _decode_text(value: str | None) -> str:
     decoded: list[str] = []
     for part, enc in parts:
         if isinstance(part, bytes):
-            decoded.append(part.decode(enc or "utf-8", errors="replace"))
+            encoding = (enc or "utf-8").strip().lower() if isinstance(enc, str) else "utf-8"
+            if not encoding or encoding in {"unknown-8bit", "unknown_8bit", "x-unknown"}:
+                encoding = "utf-8"
+            try:
+                decoded.append(part.decode(encoding, errors="replace"))
+            except LookupError:
+                decoded.append(part.decode("utf-8", errors="replace"))
         else:
             decoded.append(part)
     return "".join(decoded)
