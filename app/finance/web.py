@@ -20,7 +20,7 @@ def render_finance_page(
         "<p>Zatím není uložený žádný náhled importu.</p>"
         if not preview_rows
         else "<table border='1' cellpadding='6' cellspacing='0'>"
-        "<thead><tr><th>Řádek</th><th>Datum</th><th>Protistrana</th><th>Částka</th><th>Účet protistrany</th>"
+        "<thead><tr><th>Řádek</th><th>ID</th><th>Datum</th><th>Protistrana</th><th>Částka</th><th>Účet protistrany</th>"
         "<th>Popis</th><th>Napárovaný email</th><th>Navržená kategorie</th><th>Confidence</th><th>Důvod</th><th>Původní kategorie</th></tr></thead>"
         f"<tbody>{rows}</tbody></table>"
     )
@@ -39,6 +39,9 @@ def render_finance_page(
         "<p><label><input type='checkbox' name='save_training' value='1'> Pokud CSV obsahuje sloupec <code>kategorie</code>, ulož ho i jako trénovací data.</label></p>"
         "<p><button type='submit'>Nahrát a zobrazit náhled</button></p>"
         "</form>"
+        "<form method='post' action='/finance/rematch' style='margin-top:10px'>"
+        "<button type='submit'>Zkusit znovu napárovat emaily</button>"
+        "</form>"
         "<h3>Doporučená hlavička</h3>"
         f"<p><code>{html.escape(template_headers)}</code></p>"
         "<p>Nutné minimum je <code>datum</code>, <code>částka</code> a <code>obchodník</code>/protistrana. "
@@ -48,6 +51,7 @@ def render_finance_page(
         "<h2>Stav</h2>"
         f"<p>Uložených trénovacích příkladů: <b>{training_count}</b></p>"
         f"<p>Poslední náhled obsahuje: <b>{last_import_count}</b> transakcí</p>"
+        f"<p>Napárované emaily: <b>{sum(1 for item in preview_rows if item.get('email_match_status') == 'matched')}</b></p>"
         "<p>Logika návrhu je zatím záměrně jednoduchá: účet protistrany, název protistrany a poznámka. "
         "Později sem doplníme pravidla, ruční potvrzení a Discord digest.</p>"
         "</div>"
@@ -62,7 +66,7 @@ def _render_row(item: dict) -> str:
     email_match = item.get("email_match") or {}
     amount = item.get("amount", 0)
     amount_text = f"{float(amount):,.2f}".replace(",", " ").replace(".", ",")
-    source_row = int(item.get("source_row", 0))
+    transaction_id = str(item.get("transaction_id", ""))
     email_block = ""
     if email_match:
         email_block = (
@@ -71,16 +75,19 @@ def _render_row(item: dict) -> str:
             f"<div style='color:#555'>confidence {html.escape(str(email_match.get('confidence', '')))} | "
             f"{html.escape(str(email_match.get('reason', '')))}</div>"
         )
+    else:
+        email_block = f"<div style='color:#777'>{html.escape(str(item.get('email_match_status', 'unmatched')))}</div>"
     return (
         "<tr>"
         f"<td>{html.escape(str(item.get('source_row', '')))}</td>"
+        f"<td><code>{html.escape(transaction_id[:8])}</code></td>"
         f"<td>{html.escape(str(item.get('booking_date', '')))}</td>"
         f"<td>{html.escape(str(item.get('counterparty', '')))}</td>"
         f"<td>{html.escape(amount_text)} {html.escape(str(item.get('currency', 'CZK')))}</td>"
         f"<td>{html.escape(str(item.get('counterparty_account', '')))}</td>"
         "<td>"
         "<form method='post' action='/finance/preview/update'>"
-        f"<input type='hidden' name='source_row' value='{source_row}'>"
+        f"<input type='hidden' name='transaction_id' value='{html.escape(transaction_id)}'>"
         f"<input type='text' name='description' value='{html.escape(str(item.get('description', '')))}' style='width:260px'> "
         "<button type='submit'>Uložit</button>"
         "</form>"

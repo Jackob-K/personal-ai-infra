@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(slots=True)
 class FinanceTransaction:
+    transaction_id: str
     source_row: int
     booking_date: str
     amount: float
@@ -30,6 +31,7 @@ class CategorizedTransaction:
     transaction: FinanceTransaction
     suggestion: CategorySuggestion | None
     email_match: "EmailMatch" | None = None
+    email_match_status: str = "unmatched"
 
 
 @dataclass(slots=True)

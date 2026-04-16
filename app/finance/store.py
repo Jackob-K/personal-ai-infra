@@ -38,6 +38,7 @@ def save_preview(transactions: list[CategorizedTransaction]) -> None:
         row = asdict(item.transaction)
         row["suggestion"] = asdict(item.suggestion) if item.suggestion else None
         row["email_match"] = asdict(item.email_match) if item.email_match else None
+        row["email_match_status"] = item.email_match_status
         rows.append(row)
     _write_json(FINANCE_PREVIEW_PATH, rows)
 
@@ -47,11 +48,11 @@ def load_preview() -> list[dict]:
     return [item for item in payload if isinstance(item, dict)]
 
 
-def update_preview_description(source_row: int, description: str) -> bool:
+def update_preview_description(transaction_id: str, description: str) -> bool:
     rows = load_preview()
     changed = False
     for item in rows:
-        if int(item.get("source_row", -1)) != source_row:
+        if str(item.get("transaction_id", "")).strip() != transaction_id:
             continue
         item["description"] = description
         changed = True

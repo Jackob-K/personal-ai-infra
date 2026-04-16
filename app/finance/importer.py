@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import re
 from datetime import datetime, timedelta
@@ -63,6 +64,15 @@ def parse_transactions(content: str) -> list[FinanceTransaction]:
         try:
             transactions.append(
                 FinanceTransaction(
+                    transaction_id=_build_transaction_id(
+                        booking_date=_normalize_date(row.get(mapped["booking_date"], "")),
+                        amount=_normalize_amount(row.get(mapped["amount"], "")),
+                        currency=(row.get(mapped.get("currency", ""), "") or "CZK").strip().upper() or "CZK",
+                        counterparty=(row.get(mapped["counterparty"], "") or "").strip(),
+                        counterparty_account=(row.get(mapped.get("counterparty_account", ""), "") or "").strip(),
+                        own_account=(row.get(mapped.get("own_account", ""), "") or "").strip(),
+                        note=(row.get(mapped.get("note", ""), "") or "").strip(),
+                    ),
                     source_row=row_number,
                     booking_date=_normalize_date(row.get(mapped["booking_date"], "")),
                     amount=_normalize_amount(row.get(mapped["amount"], "")),
@@ -140,3 +150,33 @@ def _normalize_date(value: str) -> str:
         except ValueError:
             continue
     return text
+
+
+def _build_transaction_id(
+    *,
+    booking_date: str,
+    amount: float,
+    currency: str,
+    counterparty: str,
+    counterparty_account: str,
+    own_account: str,
+    note: str,
+) -> str:
+    payload = "||".join(
+        [
+            booking_date.strip(),
+            f"{amount:.2f}",
+            currency.strip().upper(),
+            _normalize_id_text(counterparty),
+            re.sub(r"\s+", "", counterparty_account.strip()),
+            re.sub(r"\s+", "", own_account.strip()),
+            _normalize_id_text(note),
+        ]
+    )
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _normalize_id_text(value: str) -> str:
+    lowered = (value or "").strip().lower()
+    lowered = re.sub(r"[\W_]+", " ", lowered, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", lowered).strip()

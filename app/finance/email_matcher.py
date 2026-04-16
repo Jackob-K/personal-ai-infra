@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 
-from app.finance.models import EmailMatch, FinanceTransaction
+from app.finance.models import CategorizedTransaction, EmailMatch, FinanceTransaction
 from app.services.proposal_store import list_proposals
 
 
@@ -81,6 +81,35 @@ def suggest_description(transaction: FinanceTransaction, email_match: EmailMatch
     if transaction.note.strip():
         return transaction.note.strip()[:180]
     return ""
+
+
+def rematch_preview_rows(rows: list[dict]) -> list[CategorizedTransaction]:
+    refreshed: list[CategorizedTransaction] = []
+    for row in rows:
+        transaction = FinanceTransaction(
+            transaction_id=str(row.get("transaction_id", "")).strip(),
+            source_row=int(row.get("source_row", 0)),
+            booking_date=str(row.get("booking_date", "")).strip(),
+            amount=float(row.get("amount", 0)),
+            currency=str(row.get("currency", "CZK")).strip() or "CZK",
+            counterparty=str(row.get("counterparty", "")).strip(),
+            counterparty_account=str(row.get("counterparty_account", "")).strip(),
+            own_account=str(row.get("own_account", "")).strip(),
+            note=str(row.get("note", "")).strip(),
+            raw_category=str(row.get("raw_category", "")).strip(),
+            description=str(row.get("description", "")).strip(),
+        )
+        email_match = match_transaction_emails(transaction)
+        transaction.description = suggest_description(transaction, email_match)
+        refreshed.append(
+            CategorizedTransaction(
+                transaction=transaction,
+                suggestion=None,
+                email_match=email_match,
+                email_match_status="matched" if email_match else "unmatched",
+            )
+        )
+    return refreshed
 
 
 def _parse_iso_date(value: str) -> date | None:

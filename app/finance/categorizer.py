@@ -20,6 +20,7 @@ def categorize_transactions(
                 transaction=item,
                 suggestion=suggest_category(item, training_examples),
                 email_match=email_match,
+                email_match_status="matched" if email_match else "unmatched",
             )
         )
     return categorized

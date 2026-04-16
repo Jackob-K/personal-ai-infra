@@ -8,7 +8,8 @@ from urllib.parse import quote_plus
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.finance.categorizer import categorize_transactions
+from app.finance.categorizer import categorize_transactions, suggest_category
+from app.finance.email_matcher import rematch_preview_rows
 from app.finance.importer import extract_training_examples, parse_transactions
 from app.finance.store import load_preview, load_training_examples, merge_training_examples, save_preview, update_preview_description
 from app.finance.web import render_finance_page
@@ -574,15 +575,30 @@ async def finance_preview(request: Request) -> RedirectResponse:
 @app.post("/finance/preview/update")
 async def finance_preview_update(request: Request) -> RedirectResponse:
     form = await request.form()
-    source_row_raw = str(form.get("source_row", "")).strip()
+    transaction_id = str(form.get("transaction_id", "")).strip()
     description = str(form.get("description", "")).strip()
-    try:
-        source_row = int(source_row_raw)
-    except ValueError:
-        return RedirectResponse(url="/finance?error=Neplatny+radek+pro+upravu", status_code=303)
-    if not update_preview_description(source_row, description):
-        return RedirectResponse(url="/finance?error=Radek+nenalezen", status_code=303)
+    if not transaction_id:
+        return RedirectResponse(url="/finance?error=Neplatne+transaction_id", status_code=303)
+    if not update_preview_description(transaction_id, description):
+        return RedirectResponse(url="/finance?error=Transakce+nenalezena", status_code=303)
     return RedirectResponse(url="/finance?msg=Popis+ulozen", status_code=303)
+
+
+@app.post("/finance/rematch")
+def finance_rematch() -> RedirectResponse:
+    preview_rows = load_preview()
+    if not preview_rows:
+        return RedirectResponse(url="/finance?error=Neni+co+prepocitat", status_code=303)
+    refreshed = rematch_preview_rows(preview_rows)
+    training_examples = load_training_examples()
+    for item in refreshed:
+        item.suggestion = suggest_category(item.transaction, training_examples)
+    save_preview(refreshed)
+    matched = sum(1 for item in refreshed if item.email_match_status == "matched")
+    return RedirectResponse(
+        url=f"/finance?msg={quote_plus(f'Prepocitano {len(refreshed)} transakci, naparovano {matched} emailu')}",
+        status_code=303,
+    )
 
 
 @app.post("/classify-email", response_model=ClassifyEmailResponse)
