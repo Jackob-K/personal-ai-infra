@@ -172,6 +172,7 @@ def rematch_preview_rows(rows: list[dict]) -> list[CategorizedTransaction]:
             note=str(row.get("note", "")).strip(),
             raw_category=str(row.get("raw_category", "")).strip(),
             description=str(row.get("description", "")).strip(),
+            selected_category=str(row.get("selected_category", "")).strip(),
         )
         email_match, email_debug = analyze_transaction_email_match(transaction)
         transaction.description = suggest_description(transaction, email_match)

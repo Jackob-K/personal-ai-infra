@@ -88,6 +88,12 @@ def _render_row(item: dict, category_options: list[str]) -> str:
     amount = item.get("amount", 0)
     amount_text = f"{float(amount):,.2f}".replace(",", " ").replace(".", ",")
     transaction_id = str(item.get("transaction_id", ""))
+    effective_selected_category = (
+        str(item.get("selected_category", "")).strip()
+        or str(suggestion.get("category", "")).strip()
+        or str(item.get("raw_category", "")).strip()
+        or "Nezařazeno"
+    )
     email_block = ""
     if email_match:
         email_block = (
@@ -131,7 +137,7 @@ def _render_row(item: dict, category_options: list[str]) -> str:
         f"<td><input type='text' name='description__{html.escape(transaction_id)}' value='{html.escape(str(item.get('description', '')))}' style='width:260px'></td>"
         f"<td>{email_block}</td>"
         f"<td>{html.escape(str(suggestion.get('category', '')))}</td>"
-        f"<td><select name='selected_category__{html.escape(transaction_id)}'>{_category_options(category_options, str(item.get('selected_category', '')) or str(suggestion.get('category', '')) or str(item.get('raw_category', '')))}</select></td>"
+        f"<td><select name='selected_category__{html.escape(transaction_id)}'>{_category_options(category_options, effective_selected_category)}</select></td>"
         f"<td>{html.escape(str(suggestion.get('confidence', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('reason', '')))}"
         f"{'' if not suggestion.get('matched_on') else ' (' + html.escape(str(suggestion.get('matched_on'))) + ')'}"
@@ -142,6 +148,8 @@ def _render_row(item: dict, category_options: list[str]) -> str:
 
 
 def _category_options(options: list[str], selected: str) -> str:
+    if selected and selected not in options:
+        options = [selected] + options
     rendered: list[str] = []
     for option in options:
         sel = " selected" if option == selected else ""
