@@ -80,6 +80,7 @@ def upsert_proposals(new_items: list[TaskProposal]) -> tuple[int, int, list[str]
             existing_item.sender = item.sender or existing_item.sender
             existing_item.subject = item.subject or existing_item.subject
             existing_item.source_excerpt = item.source_excerpt or existing_item.source_excerpt
+            existing_item.source_body = item.source_body or existing_item.source_body
             if existing_item.source_status == "removed":
                 existing_item.source_status = "active"
                 existing_item.source_removed_at = None

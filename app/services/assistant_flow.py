@@ -64,6 +64,7 @@ def ingest_and_create_proposals(payload: IngestImapRequest, trigger: str = "manu
                 sender=message.sender,
                 subject=message.subject,
                 source_excerpt=message.body[:320],
+                source_body=message.body[:5000],
                 role=classified.role,
                 handling=_initial_handling(classified.role, classified.requires_action),
                 summary=classified.summary,

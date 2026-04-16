@@ -105,6 +105,7 @@ class TaskProposal(BaseModel):
     sender: str
     subject: str
     source_excerpt: str = ""
+    source_body: str = ""
     role: str
     handling: Literal["review", "process", "needs_attention", "calendar"] = "review"
     summary: str
