@@ -39,6 +39,7 @@ def save_preview(transactions: list[CategorizedTransaction]) -> None:
         row["suggestion"] = asdict(item.suggestion) if item.suggestion else None
         row["email_match"] = asdict(item.email_match) if item.email_match else None
         row["email_match_status"] = item.email_match_status
+        row["email_match_debug"] = asdict(item.email_match_debug) if item.email_match_debug else None
         rows.append(row)
     _write_json(FINANCE_PREVIEW_PATH, rows)
 

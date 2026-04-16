@@ -64,6 +64,7 @@ def render_finance_page(
 def _render_row(item: dict) -> str:
     suggestion = item.get("suggestion") or {}
     email_match = item.get("email_match") or {}
+    email_debug = item.get("email_match_debug") or {}
     amount = item.get("amount", 0)
     amount_text = f"{float(amount):,.2f}".replace(",", " ").replace(".", ",")
     transaction_id = str(item.get("transaction_id", ""))
@@ -76,7 +77,29 @@ def _render_row(item: dict) -> str:
             f"{html.escape(str(email_match.get('reason', '')))}</div>"
         )
     else:
-        email_block = f"<div style='color:#777'>{html.escape(str(item.get('email_match_status', 'unmatched')))}</div>"
+        email_block = f"<div style='color:#777'><b>{html.escape(str(item.get('email_match_status', 'unmatched')))}</b></div>"
+    if email_debug:
+        email_block += f"<div style='margin-top:6px;color:#555'>{html.escape(str(email_debug.get('summary', '')))}</div>"
+        candidates = email_debug.get("top_candidates") or []
+        if candidates:
+            email_block += "<div style='margin-top:6px'><b>Top kandidáti:</b></div><ul style='padding-left:18px;margin:4px 0'>"
+            for candidate in candidates[:3]:
+                label = (
+                    f"{candidate.get('score')} | "
+                    f"{candidate.get('subject', '')[:60]} | "
+                    f"{candidate.get('reason', '')}"
+                )
+                details = (
+                    f"a={candidate.get('amount_score')} "
+                    f"t={candidate.get('text_score')} "
+                    f"d={candidate.get('date_score')} "
+                    f"days={candidate.get('delta_days', '-')}"
+                )
+                email_block += (
+                    f"<li><div>{html.escape(label)}</div>"
+                    f"<div style='color:#666'>{html.escape(details)}</div></li>"
+                )
+            email_block += "</ul>"
     return (
         "<tr>"
         f"<td>{html.escape(str(item.get('source_row', '')))}</td>"

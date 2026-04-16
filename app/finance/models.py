@@ -32,6 +32,7 @@ class CategorizedTransaction:
     suggestion: CategorySuggestion | None
     email_match: "EmailMatch" | None = None
     email_match_status: str = "unmatched"
+    email_match_debug: "EmailMatchDebug | None" = None
 
 
 @dataclass(slots=True)
@@ -54,3 +55,27 @@ class EmailMatch:
     subject: str
     confidence: float
     reason: str
+
+
+@dataclass(slots=True)
+class EmailMatchCandidate:
+    proposal_id: str
+    received_at: str
+    sender: str
+    subject: str
+    score: float
+    amount_score: float
+    text_score: float
+    date_score: float
+    delta_days: int | None
+    passes_threshold: bool
+    reason: str
+
+
+@dataclass(slots=True)
+class EmailMatchDebug:
+    scanned_count: int
+    within_window_count: int
+    threshold: float
+    summary: str
+    top_candidates: list[EmailMatchCandidate]
