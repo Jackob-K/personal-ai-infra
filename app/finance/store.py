@@ -78,6 +78,55 @@ def update_preview_category(transaction_id: str, category: str) -> bool:
     return changed
 
 
+def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
+    changed = 0
+
+    preview_rows = load_preview()
+    preview_changed = False
+    for item in preview_rows:
+        if _month_key(item) != month_id:
+            continue
+        transaction_id = str(item.get("transaction_id", "")).strip()
+        update = updates.get(transaction_id)
+        if not update:
+            continue
+        new_description = update.get("description", str(item.get("description", "")))
+        new_category = update.get("selected_category", str(item.get("selected_category", "")))
+        if str(item.get("description", "")) != new_description:
+            item["description"] = new_description
+            preview_changed = True
+            changed += 1
+        if str(item.get("selected_category", "")) != new_category:
+            item["selected_category"] = new_category
+            preview_changed = True
+            changed += 1
+    if preview_changed:
+        _write_json(FINANCE_PREVIEW_PATH, preview_rows)
+
+    snapshots = load_month_snapshots()
+    snapshot = snapshots.get(month_id)
+    if snapshot:
+        snapshot_changed = False
+        for item in snapshot.get("rows", []):
+            transaction_id = str(item.get("transaction_id", "")).strip()
+            update = updates.get(transaction_id)
+            if not update:
+                continue
+            new_description = update.get("description", str(item.get("description", "")))
+            new_category = update.get("selected_category", str(item.get("selected_category", "")))
+            if str(item.get("description", "")) != new_description:
+                item["description"] = new_description
+                snapshot_changed = True
+            if str(item.get("selected_category", "")) != new_category:
+                item["selected_category"] = new_category
+                snapshot_changed = True
+        if snapshot_changed:
+            snapshots[month_id] = snapshot
+            _write_json(FINANCE_MONTHS_PATH, snapshots)
+
+    return changed
+
+
 def load_month_snapshots() -> dict[str, dict]:
     payload = _load_json(FINANCE_MONTHS_PATH, default={})
     return payload if isinstance(payload, dict) else {}
@@ -119,3 +168,8 @@ def _write_json(path: Path, payload) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
+
+
+def _month_key(item: dict) -> str:
+    booking_date = str(item.get("booking_date", "")).strip()
+    return booking_date[:7] if len(booking_date) >= 7 else ""

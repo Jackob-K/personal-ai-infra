@@ -16,10 +16,9 @@ from app.finance.store import (
     load_preview,
     load_training_examples,
     merge_training_examples,
+    save_month_edits,
     save_month_snapshot,
     save_preview,
-    update_preview_category,
-    update_preview_description,
 )
 from app.finance.web import render_finance_page
 from app.models import (
@@ -596,28 +595,25 @@ async def finance_preview(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/finance?msg={quote_plus(message.replace('+', ' '))}", status_code=303)
 
 
-@app.post("/finance/preview/update")
-async def finance_preview_update(request: Request) -> RedirectResponse:
+@app.post("/finance/month/save")
+async def finance_month_save(request: Request) -> RedirectResponse:
     form = await request.form()
-    transaction_id = str(form.get("transaction_id", "")).strip()
-    description = str(form.get("description", "")).strip()
-    if not transaction_id:
-        return RedirectResponse(url="/finance?error=Neplatne+transaction_id", status_code=303)
-    if not update_preview_description(transaction_id, description):
-        return RedirectResponse(url="/finance?error=Transakce+nenalezena", status_code=303)
-    return RedirectResponse(url="/finance?msg=Popis+ulozen", status_code=303)
-
-
-@app.post("/finance/preview/category")
-async def finance_preview_category(request: Request) -> RedirectResponse:
-    form = await request.form()
-    transaction_id = str(form.get("transaction_id", "")).strip()
-    category = str(form.get("selected_category", "")).strip()
-    if not transaction_id or not category:
-        return RedirectResponse(url="/finance?error=Chybi+transaction_id+nebo+kategorie", status_code=303)
-    if not update_preview_category(transaction_id, category):
-        return RedirectResponse(url="/finance?error=Transakce+nenalezena", status_code=303)
-    return RedirectResponse(url="/finance?msg=Kategorie+ulozena", status_code=303)
+    month_id = str(form.get("month_id", "")).strip()
+    if not month_id:
+        return RedirectResponse(url="/finance?error=Chybi+mesic", status_code=303)
+    updates: dict[str, dict[str, str]] = {}
+    for key, value in form.items():
+        if key.startswith("description__"):
+            transaction_id = key.split("__", 1)[1]
+            updates.setdefault(transaction_id, {})["description"] = str(value).strip()
+        elif key.startswith("selected_category__"):
+            transaction_id = key.split("__", 1)[1]
+            updates.setdefault(transaction_id, {})["selected_category"] = str(value).strip()
+    changed = save_month_edits(month_id, updates)
+    return RedirectResponse(
+        url=f"/finance?month={quote_plus(month_id)}&msg={quote_plus(f'Ulozeno zmen: {changed}')}",
+        status_code=303,
+    )
 
 
 @app.post("/finance/rematch")
