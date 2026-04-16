@@ -15,10 +15,12 @@ def categorize_transactions(
     for item in transactions:
         email_match, email_debug = analyze_transaction_email_match(item)
         item.description = suggest_description(item, email_match)
+        category_suggestion = suggest_category(item, training_examples)
+        item.selected_category = category_suggestion.category if category_suggestion else item.raw_category
         categorized.append(
             CategorizedTransaction(
                 transaction=item,
-                suggestion=suggest_category(item, training_examples),
+                suggestion=category_suggestion,
                 email_match=email_match,
                 email_match_status="matched" if email_match else "unmatched",
                 email_match_debug=email_debug,

@@ -16,6 +16,7 @@ class FinanceTransaction:
     note: str
     raw_category: str
     description: str = ""
+    selected_category: str = ""
 
 
 @dataclass(slots=True)

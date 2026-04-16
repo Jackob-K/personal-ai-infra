@@ -11,7 +11,16 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.finance.categorizer import categorize_transactions, suggest_category
 from app.finance.email_matcher import rematch_preview_rows
 from app.finance.importer import extract_training_examples, parse_transactions
-from app.finance.store import load_preview, load_training_examples, merge_training_examples, save_preview, update_preview_description
+from app.finance.store import (
+    load_month_snapshots,
+    load_preview,
+    load_training_examples,
+    merge_training_examples,
+    save_month_snapshot,
+    save_preview,
+    update_preview_category,
+    update_preview_description,
+)
 from app.finance.web import render_finance_page
 from app.models import (
     ApproveProposalRequest,
@@ -523,11 +532,26 @@ def health() -> dict[str, str]:
 
 
 @app.get("/finance", response_class=HTMLResponse)
-def finance_page(msg: str | None = None, error: str | None = None) -> HTMLResponse:
+def finance_page(msg: str | None = None, error: str | None = None, month: str | None = None) -> HTMLResponse:
     preview_rows = load_preview()
+    snapshots = load_month_snapshots()
+    preview_months = {_month_key(item) for item in preview_rows if _month_key(item)}
+    available_months = sorted(set(preview_months) | set(snapshots.keys()), reverse=True)
+    selected_month = month or (available_months[0] if available_months else "")
+    month_rows = [item for item in preview_rows if _month_key(item) == selected_month]
+    is_closed_month = False
+    if not month_rows and selected_month in snapshots:
+        month_rows = list(snapshots[selected_month].get("rows", []))
+        is_closed_month = bool(snapshots[selected_month].get("closed"))
+    category_options = _finance_category_options(preview_rows, snapshots)
     training_count = len(load_training_examples())
     body = render_finance_page(
         preview_rows=preview_rows,
+        month_rows=month_rows,
+        selected_month=selected_month,
+        available_months=available_months,
+        is_closed_month=is_closed_month,
+        category_options=category_options,
         training_count=training_count,
         last_import_count=len(preview_rows),
         message=msg,
@@ -584,6 +608,18 @@ async def finance_preview_update(request: Request) -> RedirectResponse:
     return RedirectResponse(url="/finance?msg=Popis+ulozen", status_code=303)
 
 
+@app.post("/finance/preview/category")
+async def finance_preview_category(request: Request) -> RedirectResponse:
+    form = await request.form()
+    transaction_id = str(form.get("transaction_id", "")).strip()
+    category = str(form.get("selected_category", "")).strip()
+    if not transaction_id or not category:
+        return RedirectResponse(url="/finance?error=Chybi+transaction_id+nebo+kategorie", status_code=303)
+    if not update_preview_category(transaction_id, category):
+        return RedirectResponse(url="/finance?error=Transakce+nenalezena", status_code=303)
+    return RedirectResponse(url="/finance?msg=Kategorie+ulozena", status_code=303)
+
+
 @app.post("/finance/rematch")
 def finance_rematch() -> RedirectResponse:
     preview_rows = load_preview()
@@ -599,6 +635,20 @@ def finance_rematch() -> RedirectResponse:
         url=f"/finance?msg={quote_plus(f'Prepocitano {len(refreshed)} transakci, naparovano {matched} emailu')}",
         status_code=303,
     )
+
+
+@app.post("/finance/close-month")
+async def finance_close_month(request: Request) -> RedirectResponse:
+    form = await request.form()
+    month_id = str(form.get("month_id", "")).strip()
+    preview_rows = load_preview()
+    if not month_id:
+        return RedirectResponse(url="/finance?error=Chybi+mesic+k+uzavreni", status_code=303)
+    month_rows = [item for item in preview_rows if _month_key(item) == month_id]
+    if not month_rows:
+        return RedirectResponse(url=f"/finance?month={quote_plus(month_id)}&error=Pro+mesic+nejsou+zadna+data", status_code=303)
+    save_month_snapshot(month_id, month_rows)
+    return RedirectResponse(url=f"/finance?month={quote_plus(month_id)}&msg=Mesic+uzavren", status_code=303)
 
 
 @app.post("/classify-email", response_model=ClassifyEmailResponse)
@@ -897,3 +947,44 @@ def _tab_style(is_active: bool) -> str:
 
 def _is_active_source(proposal) -> bool:
     return getattr(proposal, "source_status", "active") == "active"
+
+
+def _month_key(item: dict) -> str:
+    booking_date = str(item.get("booking_date", "")).strip()
+    return booking_date[:7] if len(booking_date) >= 7 else ""
+
+
+def _finance_category_options(preview_rows: list[dict], snapshots: dict[str, dict]) -> list[str]:
+    categories: set[str] = {
+        "Auto – provoz, opravy",
+        "Bydlení",
+        "Dárky",
+        "Investování",
+        "Já",
+        "Kapesné",
+        "Obědy",
+        "Potraviny",
+        "Restaurace",
+        "Telefon a internet",
+        "Výplata",
+        "Webové služby",
+        "Výlety",
+        "Škola, univerzita",
+        "Nezařazeno",
+    }
+    for row in preview_rows:
+        for key in ("selected_category", "raw_category"):
+            value = str(row.get(key, "")).strip()
+            if value:
+                categories.add(value)
+        suggestion = row.get("suggestion") or {}
+        value = str(suggestion.get("category", "")).strip()
+        if value:
+            categories.add(value)
+    for snapshot in snapshots.values():
+        for row in snapshot.get("rows", []):
+            for key in ("selected_category", "raw_category"):
+                value = str(row.get(key, "")).strip()
+                if value:
+                    categories.add(value)
+    return sorted(categories)

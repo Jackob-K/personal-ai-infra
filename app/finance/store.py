@@ -11,6 +11,7 @@ from app.services.settings import BASE_DIR
 FINANCE_RUNTIME_DIR = BASE_DIR / "data" / "runtime"
 FINANCE_TRAINING_PATH = FINANCE_RUNTIME_DIR / "finance_training.json"
 FINANCE_PREVIEW_PATH = FINANCE_RUNTIME_DIR / "finance_preview.json"
+FINANCE_MONTHS_PATH = FINANCE_RUNTIME_DIR / "finance_months.json"
 
 
 def load_training_examples() -> list[TrainingExample]:
@@ -61,6 +62,35 @@ def update_preview_description(transaction_id: str, description: str) -> bool:
     if changed:
         _write_json(FINANCE_PREVIEW_PATH, rows)
     return changed
+
+
+def update_preview_category(transaction_id: str, category: str) -> bool:
+    rows = load_preview()
+    changed = False
+    for item in rows:
+        if str(item.get("transaction_id", "")).strip() != transaction_id:
+            continue
+        item["selected_category"] = category
+        changed = True
+        break
+    if changed:
+        _write_json(FINANCE_PREVIEW_PATH, rows)
+    return changed
+
+
+def load_month_snapshots() -> dict[str, dict]:
+    payload = _load_json(FINANCE_MONTHS_PATH, default={})
+    return payload if isinstance(payload, dict) else {}
+
+
+def save_month_snapshot(month_id: str, rows: list[dict]) -> None:
+    payload = load_month_snapshots()
+    payload[month_id] = {
+        "month_id": month_id,
+        "closed": True,
+        "rows": rows,
+    }
+    _write_json(FINANCE_MONTHS_PATH, payload)
 
 
 def _training_key(item: TrainingExample) -> str:

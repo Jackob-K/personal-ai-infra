@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import html
+from collections import defaultdict
 
 
 def render_finance_page(
     *,
     preview_rows: list[dict],
+    month_rows: list[dict],
+    selected_month: str,
+    available_months: list[str],
+    is_closed_month: bool,
+    category_options: list[str],
     training_count: int,
     last_import_count: int,
     message: str | None = None,
@@ -15,13 +21,15 @@ def render_finance_page(
     danger = f"<p style='color:#b00'>{html.escape(error)}</p>" if error else ""
     template_headers = "datum,částka,obchodník,číslo protiúčtu,účet,poznámka,kategorie"
 
-    rows = "".join(_render_row(item) for item in preview_rows[:200])
+    rows = "".join(_render_row(item, category_options) for item in month_rows[:250])
+    month_nav = _render_month_nav(available_months, selected_month)
+    summary_block = _render_month_summary(month_rows, selected_month, is_closed_month)
     table = (
         "<p>Zatím není uložený žádný náhled importu.</p>"
-        if not preview_rows
+        if not month_rows
         else "<table border='1' cellpadding='6' cellspacing='0'>"
         "<thead><tr><th>Řádek</th><th>ID</th><th>Datum</th><th>Protistrana</th><th>Částka</th><th>Účet protistrany</th>"
-        "<th>Popis</th><th>Napárovaný email</th><th>Navržená kategorie</th><th>Confidence</th><th>Důvod</th><th>Původní kategorie</th></tr></thead>"
+        "<th>Popis</th><th>Napárovaný email</th><th>Navržená kategorie</th><th>Vybraná kategorie</th><th>Confidence</th><th>Důvod</th><th>Původní kategorie</th></tr></thead>"
         f"<tbody>{rows}</tbody></table>"
     )
 
@@ -29,6 +37,8 @@ def render_finance_page(
         "<h1>Finance</h1>"
         "<p>První verze finančního modulu: ruční upload exportu, sjednocení transakcí a návrhy kategorií z historie.</p>"
         f"{notice}{danger}"
+        f"{month_nav}"
+        f"{summary_block}"
         "<div style='display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap'>"
         "<div style='flex:1;min-width:320px'>"
         "<h2>Import</h2>"
@@ -42,6 +52,10 @@ def render_finance_page(
         "<form method='post' action='/finance/rematch' style='margin-top:10px'>"
         "<button type='submit'>Zkusit znovu napárovat emaily</button>"
         "</form>"
+        "<form method='post' action='/finance/close-month' style='margin-top:10px'>"
+        f"<input type='hidden' name='month_id' value='{html.escape(selected_month)}'>"
+        "<button type='submit'>Uzavřít měsíc</button>"
+        "</form>"
         "<h3>Doporučená hlavička</h3>"
         f"<p><code>{html.escape(template_headers)}</code></p>"
         "<p>Nutné minimum je <code>datum</code>, <code>částka</code> a <code>obchodník</code>/protistrana. "
@@ -51,17 +65,18 @@ def render_finance_page(
         "<h2>Stav</h2>"
         f"<p>Uložených trénovacích příkladů: <b>{training_count}</b></p>"
         f"<p>Poslední náhled obsahuje: <b>{last_import_count}</b> transakcí</p>"
-        f"<p>Napárované emaily: <b>{sum(1 for item in preview_rows if item.get('email_match_status') == 'matched')}</b></p>"
+        f"<p>Zvolený měsíc: <b>{html.escape(selected_month or '-')}</b> | uzavřený: <b>{'ano' if is_closed_month else 'ne'}</b></p>"
+        f"<p>Napárované emaily: <b>{sum(1 for item in month_rows if item.get('email_match_status') == 'matched')}</b></p>"
         "<p>Logika návrhu je zatím záměrně jednoduchá: účet protistrany, název protistrany a poznámka. "
         "Později sem doplníme pravidla, ruční potvrzení a Discord digest.</p>"
         "</div>"
         "</div>"
-        "<h2>Poslední náhled</h2>"
+        "<h2>Transakce měsíce</h2>"
         f"{table}"
     )
 
 
-def _render_row(item: dict) -> str:
+def _render_row(item: dict, category_options: list[str]) -> str:
     suggestion = item.get("suggestion") or {}
     email_match = item.get("email_match") or {}
     email_debug = item.get("email_match_debug") or {}
@@ -117,6 +132,13 @@ def _render_row(item: dict) -> str:
         "</td>"
         f"<td>{email_block}</td>"
         f"<td>{html.escape(str(suggestion.get('category', '')))}</td>"
+        "<td>"
+        "<form method='post' action='/finance/preview/category'>"
+        f"<input type='hidden' name='transaction_id' value='{html.escape(transaction_id)}'>"
+        f"<select name='selected_category'>{_category_options(category_options, str(item.get('selected_category', '')) or str(suggestion.get('category', '')) or str(item.get('raw_category', '')))}</select> "
+        "<button type='submit'>Uložit</button>"
+        "</form>"
+        "</td>"
         f"<td>{html.escape(str(suggestion.get('confidence', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('reason', '')))}"
         f"{'' if not suggestion.get('matched_on') else ' (' + html.escape(str(suggestion.get('matched_on'))) + ')'}"
@@ -124,3 +146,117 @@ def _render_row(item: dict) -> str:
         f"<td>{html.escape(str(item.get('raw_category', '')))}</td>"
         "</tr>"
     )
+
+
+def _category_options(options: list[str], selected: str) -> str:
+    rendered: list[str] = []
+    for option in options:
+        sel = " selected" if option == selected else ""
+        rendered.append(f"<option value='{html.escape(option)}'{sel}>{html.escape(option)}</option>")
+    return "".join(rendered)
+
+
+def _render_month_nav(months: list[str], selected_month: str) -> str:
+    if not months:
+        return ""
+    links = []
+    for month in months:
+        style = "font-weight:bold;text-decoration:underline;" if month == selected_month else ""
+        links.append(f"<a href='/finance?month={html.escape(month)}' style='margin-right:12px;{style}'>{html.escape(month)}</a>")
+    return "<div style='margin-bottom:16px'><b>Měsíce:</b> " + "".join(links) + "</div>"
+
+
+def _render_month_summary(rows: list[dict], selected_month: str, is_closed_month: bool) -> str:
+    if not rows:
+        return "<p>Pro vybraný měsíc zatím nejsou data.</p>"
+    category_sums: dict[str, float] = defaultdict(float)
+    income = 0.0
+    expense = 0.0
+    for item in rows:
+        category = str(item.get("selected_category") or item.get("raw_category") or "Nezařazeno")
+        amount = float(item.get("amount", 0))
+        category_sums[category] += amount
+        if amount >= 0:
+            income += amount
+        else:
+            expense += abs(amount)
+    invest = abs(category_sums.get("Investování", 0.0))
+    available = max(0.0, income - expense)
+    bars = _render_bar_chart(category_sums)
+    pie_one = _render_pie(
+        [
+            ("Příjmy", income),
+            ("Výdaje", expense),
+            ("Investice", invest),
+        ]
+    )
+    pie_two = _render_pie(_top_category_slices(category_sums))
+    return (
+        "<section style='margin-bottom:20px'>"
+        f"<h2>Měsíc {html.escape(selected_month)}</h2>"
+        f"<p>Stav: <b>{'uzavřený' if is_closed_month else 'pracovní náhled'}</b> | "
+        f"Příjmy: <b>{_fmt_amount(income)}</b> | Výdaje: <b>{_fmt_amount(-expense)}</b> | "
+        f"K investování orientačně: <b>{_fmt_amount(available)}</b></p>"
+        f"{bars}"
+        "<div style='display:flex;gap:24px;flex-wrap:wrap;margin-top:16px'>"
+        f"{pie_one}"
+        f"{pie_two}"
+        "</div>"
+        "</section>"
+    )
+
+
+def _render_bar_chart(category_sums: dict[str, float]) -> str:
+    items = sorted(((k, abs(v)) for k, v in category_sums.items() if abs(v) > 0.01), key=lambda x: x[1], reverse=True)[:10]
+    if not items:
+        return "<p>Graf kategorií se objeví po přiřazení kategorií.</p>"
+    max_value = max(value for _, value in items) or 1.0
+    rows = []
+    for label, value in items:
+        width = max(2, int((value / max_value) * 100))
+        rows.append(
+            "<div style='display:grid;grid-template-columns:220px 1fr 120px;gap:10px;align-items:center;margin:6px 0'>"
+            f"<div>{html.escape(label)}</div>"
+            f"<div style='background:#e9eef3;border-radius:999px;overflow:hidden'><div style='width:{width}%;background:#2f6fed;height:14px'></div></div>"
+            f"<div>{html.escape(_fmt_amount(value))}</div>"
+            "</div>"
+        )
+    return "<div style='border:1px solid #ddd;border-radius:10px;padding:14px'><h3 style='margin-top:0'>Kategorie</h3>" + "".join(rows) + "</div>"
+
+
+def _render_pie(slices: list[tuple[str, float]]) -> str:
+    filtered = [(label, value) for label, value in slices if value > 0.01]
+    if not filtered:
+        return "<div style='border:1px solid #ddd;border-radius:10px;padding:14px;min-width:260px'><p>Koláč zatím není k dispozici.</p></div>"
+    total = sum(value for _, value in filtered) or 1.0
+    colors = ["#2f6fed", "#ef8a17", "#17a673", "#ca3e47", "#7a5cff", "#888"]
+    stops = []
+    start = 0.0
+    legend = []
+    for idx, (label, value) in enumerate(filtered):
+        pct = (value / total) * 100
+        end = start + pct
+        color = colors[idx % len(colors)]
+        stops.append(f"{color} {start:.2f}% {end:.2f}%")
+        legend.append(f"<div><span style='display:inline-block;width:10px;height:10px;background:{color};margin-right:6px'></span>{html.escape(label)}: {html.escape(_fmt_amount(value))}</div>")
+        start = end
+    return (
+        "<div style='border:1px solid #ddd;border-radius:10px;padding:14px;min-width:260px'>"
+        f"<div style='width:180px;height:180px;border-radius:50%;background:conic-gradient({', '.join(stops)});margin-bottom:12px'></div>"
+        + "".join(legend)
+        + "</div>"
+    )
+
+
+def _top_category_slices(category_sums: dict[str, float]) -> list[tuple[str, float]]:
+    items = sorted(((label, abs(value)) for label, value in category_sums.items() if abs(value) > 0.01), key=lambda x: x[1], reverse=True)
+    top = items[:4]
+    other = sum(value for _, value in items[4:])
+    if other > 0:
+        top.append(("Ostatní", other))
+    return top
+
+
+def _fmt_amount(value: float) -> str:
+    sign = "-" if value < 0 else ""
+    return sign + f"{abs(value):,.2f}".replace(",", " ").replace(".", ",") + " CZK"
