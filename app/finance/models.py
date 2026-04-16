@@ -17,6 +17,10 @@ class FinanceTransaction:
     raw_category: str
     description: str = ""
     selected_category: str = ""
+    entry_type: str = ""
+    personal_amount: float = 0.0
+    effective_month: str = ""
+    related_party: str = ""
 
 
 @dataclass(slots=True)

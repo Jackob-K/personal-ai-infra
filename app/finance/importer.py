@@ -82,6 +82,8 @@ def parse_transactions(content: str) -> list[FinanceTransaction]:
                     own_account=(row.get(mapped.get("own_account", ""), "") or "").strip(),
                     note=(row.get(mapped.get("note", ""), "") or "").strip(),
                     raw_category=(row.get(mapped.get("raw_category", ""), "") or "").strip(),
+                    personal_amount=_normalize_amount(row.get(mapped["amount"], "")),
+                    effective_month=_normalize_date(row.get(mapped["booking_date"], ""))[:7],
                 )
             )
         except ValueError as exc:

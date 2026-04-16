@@ -4,6 +4,14 @@ import html
 import json
 from collections import defaultdict
 
+ENTRY_TYPE_OPTIONS = [
+    ("standard", "Moje položka"),
+    ("shared", "Sdílená / cizí"),
+    ("internal_transfer", "Interní převod"),
+    ("investment", "Investice"),
+    ("settlement", "Srovnání dluhu"),
+]
+
 
 def render_finance_page(
     *,
@@ -34,7 +42,7 @@ def render_finance_page(
         "<p><button type='submit'>Uložit změny měsíce</button></p>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
         "<thead><tr><th>Řádek</th><th>ID</th><th>Datum</th><th>Protistrana</th><th>Částka</th><th>Účet protistrany</th>"
-        "<th>Popis</th><th>Napárovaný email</th><th>Navržená kategorie</th><th>Vybraná kategorie</th><th>Confidence</th><th>Důvod</th><th>Původní kategorie</th></tr></thead>"
+        "<th>Popis</th><th>Napárovaný email</th><th>Navržená kategorie</th><th>Vybraná kategorie</th><th>Typ položky</th><th>Moje částka</th><th>Efektivní měsíc</th><th>Koho se týká</th><th>Confidence</th><th>Důvod</th><th>Původní kategorie</th></tr></thead>"
         f"<tbody>{rows}</tbody></table>"
         "<p style='margin-top:12px'><button type='submit'>Uložit změny měsíce</button></p>"
         "</form>"
@@ -94,6 +102,8 @@ def _render_row(item: dict, category_options: list[str]) -> str:
     email_debug = item.get("email_match_debug") or {}
     amount = item.get("amount", 0)
     amount_text = f"{float(amount):,.2f}".replace(",", " ").replace(".", ",")
+    personal_amount = float(item.get("personal_amount", amount) or 0)
+    personal_amount_text = f"{personal_amount:,.2f}".replace(",", " ").replace(".", ",")
     transaction_id = str(item.get("transaction_id", ""))
     row_key = transaction_id or f"row-{html.escape(str(item.get('source_row', '')))}"
     effective_selected_category = (
@@ -102,6 +112,12 @@ def _render_row(item: dict, category_options: list[str]) -> str:
         or str(item.get("raw_category", "")).strip()
         or "Nezařazeno"
     )
+    effective_entry_type = (
+        str(item.get("entry_type", "")).strip()
+        or ("investment" if effective_selected_category == "Investování" else "standard")
+    )
+    effective_month = str(item.get("effective_month", "")).strip() or str(item.get("booking_date", ""))[:7]
+    related_party = str(item.get("related_party", "")).strip()
     category_locked = bool(item.get("category_locked"))
     category_locked_badge = "" if not category_locked else "<div style='color:#555;margin-top:4px'>Ručně upraveno</div>"
     email_block = ""
@@ -149,6 +165,10 @@ def _render_row(item: dict, category_options: list[str]) -> str:
         f"<td>{html.escape(str(suggestion.get('category', '')))}</td>"
         f"<td><select name='selected_category__{row_key}' data-transaction-id='{row_key}' data-field='selected_category'>{_category_options(category_options, effective_selected_category)}</select>"
         f"{category_locked_badge}</td>"
+        f"<td><select name='entry_type__{row_key}' data-transaction-id='{row_key}' data-field='entry_type'>{_entry_type_options(effective_entry_type)}</select></td>"
+        f"<td><input type='text' name='personal_amount__{row_key}' data-transaction-id='{row_key}' data-field='personal_amount' value='{html.escape(personal_amount_text)}' style='width:110px'></td>"
+        f"<td><input type='text' name='effective_month__{row_key}' data-transaction-id='{row_key}' data-field='effective_month' value='{html.escape(effective_month)}' style='width:90px'></td>"
+        f"<td><input type='text' name='related_party__{row_key}' data-transaction-id='{row_key}' data-field='related_party' value='{html.escape(related_party)}' style='width:140px'></td>"
         f"<td>{html.escape(str(suggestion.get('confidence', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('reason', '')))}"
         f"{'' if not suggestion.get('matched_on') else ' (' + html.escape(str(suggestion.get('matched_on'))) + ')'}"
@@ -168,6 +188,14 @@ def _category_options(options: list[str], selected: str) -> str:
     return "".join(rendered)
 
 
+def _entry_type_options(selected: str) -> str:
+    rendered: list[str] = []
+    for value, label in ENTRY_TYPE_OPTIONS:
+        sel = " selected" if value == selected else ""
+        rendered.append(f"<option value='{html.escape(value)}'{sel}>{html.escape(label)}</option>")
+    return "".join(rendered)
+
+
 def _render_month_nav(months: list[str], selected_month: str) -> str:
     if not months:
         return ""
@@ -182,23 +210,62 @@ def _render_month_summary(rows: list[dict], selected_month: str, is_closed_month
     if not rows:
         return "<p>Pro vybraný měsíc zatím nejsou data.</p>"
     category_sums: dict[str, float] = defaultdict(float)
-    income = 0.0
-    expense = 0.0
+    bank_income = 0.0
+    bank_expense = 0.0
+    personal_income = 0.0
+    personal_expense = 0.0
+    shared_portion = 0.0
+    settlement_total = 0.0
     for item in rows:
-        category = str(item.get("selected_category") or item.get("raw_category") or "Nezařazeno")
-        amount = float(item.get("amount", 0))
-        category_sums[category] += amount
-        if amount >= 0:
-            income += amount
+        booking_amount = float(item.get("amount", 0) or 0)
+        if booking_amount >= 0:
+            bank_income += booking_amount
         else:
-            expense += abs(amount)
-    invest = abs(category_sums.get("Investování", 0.0))
-    available = max(0.0, income - expense)
+            bank_expense += abs(booking_amount)
+
+        effective_month = str(item.get("effective_month", "")).strip() or str(item.get("booking_date", ""))[:7]
+        if effective_month != selected_month:
+            continue
+        category = str(item.get("selected_category") or item.get("raw_category") or "Nezařazeno")
+        amount = float(item.get("amount", 0) or 0)
+        personal_amount = float(item.get("personal_amount", amount) or 0)
+        entry_type = str(item.get("entry_type", "")).strip() or ("investment" if category == "Investování" else "standard")
+
+        if entry_type == "settlement":
+            settlement_total += amount
+            continue
+        if entry_type == "internal_transfer":
+            continue
+
+        if entry_type == "shared":
+            shared_part = amount - personal_amount
+            if amount < 0 and shared_part < 0:
+                shared_portion += abs(shared_part)
+
+        budget_amount = personal_amount
+        category_sums[category] += budget_amount
+        if budget_amount >= 0:
+            personal_income += budget_amount
+        else:
+            personal_expense += abs(budget_amount)
+
+    invest = abs(
+        sum(
+            float(item.get("personal_amount", item.get("amount", 0)) or 0)
+            for item in rows
+            if (str(item.get("effective_month", "")).strip() or str(item.get("booking_date", ""))[:7]) == selected_month
+            and (
+                (str(item.get("entry_type", "")).strip() == "investment")
+                or str(item.get("selected_category", "")).strip() == "Investování"
+            )
+        )
+    )
+    available = max(0.0, personal_income - personal_expense)
     bars = _render_bar_chart(category_sums)
     pie_one = _render_pie(
         [
-            ("Příjmy", income),
-            ("Výdaje", expense),
+            ("Bankovní příjmy", bank_income),
+            ("Bankovní výdaje", bank_expense),
             ("Investice", invest),
         ]
     )
@@ -207,7 +274,10 @@ def _render_month_summary(rows: list[dict], selected_month: str, is_closed_month
         "<section style='margin-bottom:20px'>"
         f"<h2>Měsíc {html.escape(selected_month)}</h2>"
         f"<p>Stav: <b>{'uzavřený' if is_closed_month else 'pracovní náhled'}</b> | "
-        f"Příjmy: <b>{_fmt_amount(income)}</b> | Výdaje: <b>{_fmt_amount(-expense)}</b> | "
+        f"Bankovní příjmy: <b>{_fmt_amount(bank_income)}</b> | Bankovní výdaje: <b>{_fmt_amount(-bank_expense)}</b> | "
+        f"Moje příjmy: <b>{_fmt_amount(personal_income)}</b> | Moje výdaje: <b>{_fmt_amount(-personal_expense)}</b> | "
+        f"Cizí podíl v platbách: <b>{_fmt_amount(shared_portion)}</b> | "
+        f"Srovnání dluhů: <b>{_fmt_amount(settlement_total)}</b> | "
         f"K investování orientačně: <b>{_fmt_amount(available)}</b></p>"
         f"{bars}"
         "<div style='display:flex;gap:24px;flex-wrap:wrap;margin-top:16px'>"

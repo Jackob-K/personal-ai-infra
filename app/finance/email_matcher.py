@@ -173,6 +173,10 @@ def rematch_preview_rows(rows: list[dict]) -> list[CategorizedTransaction]:
             raw_category=str(row.get("raw_category", "")).strip(),
             description=str(row.get("description", "")).strip(),
             selected_category=str(row.get("selected_category", "")).strip(),
+            entry_type=str(row.get("entry_type", "")).strip(),
+            personal_amount=float(row.get("personal_amount", row.get("amount", 0)) or 0),
+            effective_month=str(row.get("effective_month", "")).strip(),
+            related_party=str(row.get("related_party", "")).strip(),
         )
         email_match, email_debug = analyze_transaction_email_match(transaction)
         transaction.description = suggest_description(transaction, email_match)

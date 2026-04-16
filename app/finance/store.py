@@ -92,6 +92,10 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
             continue
         new_description = update.get("description", str(item.get("description", "")))
         new_category = update.get("selected_category", str(item.get("selected_category", "")))
+        new_entry_type = update.get("entry_type", str(item.get("entry_type", ""))).strip() or "standard"
+        new_effective_month = update.get("effective_month", str(item.get("effective_month", ""))).strip() or _month_key(item)
+        new_related_party = update.get("related_party", str(item.get("related_party", ""))).strip()
+        new_personal_amount = _parse_float_like(update.get("personal_amount", item.get("personal_amount", item.get("amount", 0))), float(item.get("personal_amount", item.get("amount", 0)) or 0))
         if str(item.get("description", "")) != new_description:
             item["description"] = new_description
             item["description_locked"] = True
@@ -100,6 +104,22 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
         if str(item.get("selected_category", "")) != new_category:
             item["selected_category"] = new_category
             item["category_locked"] = True
+            preview_changed = True
+            changed += 1
+        if str(item.get("entry_type", "")).strip() != new_entry_type:
+            item["entry_type"] = new_entry_type
+            preview_changed = True
+            changed += 1
+        if str(item.get("effective_month", "")).strip() != new_effective_month:
+            item["effective_month"] = new_effective_month
+            preview_changed = True
+            changed += 1
+        if str(item.get("related_party", "")).strip() != new_related_party:
+            item["related_party"] = new_related_party
+            preview_changed = True
+            changed += 1
+        if float(item.get("personal_amount", item.get("amount", 0)) or 0) != new_personal_amount:
+            item["personal_amount"] = new_personal_amount
             preview_changed = True
             changed += 1
     if preview_changed:
@@ -116,6 +136,10 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
                 continue
             new_description = update.get("description", str(item.get("description", "")))
             new_category = update.get("selected_category", str(item.get("selected_category", "")))
+            new_entry_type = update.get("entry_type", str(item.get("entry_type", ""))).strip() or "standard"
+            new_effective_month = update.get("effective_month", str(item.get("effective_month", ""))).strip() or _month_key(item)
+            new_related_party = update.get("related_party", str(item.get("related_party", ""))).strip()
+            new_personal_amount = _parse_float_like(update.get("personal_amount", item.get("personal_amount", item.get("amount", 0))), float(item.get("personal_amount", item.get("amount", 0)) or 0))
             if str(item.get("description", "")) != new_description:
                 item["description"] = new_description
                 item["description_locked"] = True
@@ -123,6 +147,18 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
             if str(item.get("selected_category", "")) != new_category:
                 item["selected_category"] = new_category
                 item["category_locked"] = True
+                snapshot_changed = True
+            if str(item.get("entry_type", "")).strip() != new_entry_type:
+                item["entry_type"] = new_entry_type
+                snapshot_changed = True
+            if str(item.get("effective_month", "")).strip() != new_effective_month:
+                item["effective_month"] = new_effective_month
+                snapshot_changed = True
+            if str(item.get("related_party", "")).strip() != new_related_party:
+                item["related_party"] = new_related_party
+                snapshot_changed = True
+            if float(item.get("personal_amount", item.get("amount", 0)) or 0) != new_personal_amount:
+                item["personal_amount"] = new_personal_amount
                 snapshot_changed = True
         if snapshot_changed:
             snapshots[month_id] = snapshot
@@ -229,3 +265,18 @@ def _row_key(item: dict) -> str:
         return transaction_id
     source_row = str(item.get("source_row", "")).strip()
     return f"row-{source_row}" if source_row else ""
+
+
+def _parse_float_like(value, fallback: float) -> float:
+    text = str(value if value is not None else "").strip()
+    if not text:
+        return fallback
+    text = text.replace(" ", "").replace("\u00a0", "").replace("\u202f", "")
+    if "," in text and "." in text:
+        text = text.replace(".", "").replace(",", ".")
+    else:
+        text = text.replace(",", ".")
+    try:
+        return float(text)
+    except ValueError:
+        return fallback

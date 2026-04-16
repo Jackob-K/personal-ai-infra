@@ -17,6 +17,17 @@ def categorize_transactions(
         item.description = suggest_description(item, email_match)
         category_suggestion = suggest_category(item, training_examples)
         item.selected_category = category_suggestion.category if category_suggestion else item.raw_category
+        if not item.effective_month and item.booking_date:
+            item.effective_month = item.booking_date[:7]
+        if item.personal_amount == 0.0 and item.amount != 0.0:
+            item.personal_amount = item.amount
+        if not item.entry_type:
+            if item.selected_category == "Investování":
+                item.entry_type = "investment"
+            elif item.amount >= 0:
+                item.entry_type = "standard"
+            else:
+                item.entry_type = "standard"
         categorized.append(
             CategorizedTransaction(
                 transaction=item,

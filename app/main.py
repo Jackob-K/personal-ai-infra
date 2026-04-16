@@ -646,6 +646,10 @@ async def finance_month_save(request: Request) -> RedirectResponse:
                         matching_item.get("selected_category", "") or (matching_item.get("suggestion") or {}).get("category", "") or matching_item.get("raw_category", ""),
                     )
                 ).strip(),
+                "entry_type": str(form.get(f"entry_type__{row_key}", matching_item.get("entry_type", "standard"))).strip(),
+                "personal_amount": str(form.get(f"personal_amount__{row_key}", matching_item.get("personal_amount", matching_item.get("amount", 0)))).strip(),
+                "effective_month": str(form.get(f"effective_month__{row_key}", matching_item.get("effective_month", _month_key(matching_item)))).strip(),
+                "related_party": str(form.get(f"related_party__{row_key}", matching_item.get("related_party", ""))).strip(),
             }
     if not updates:
         return RedirectResponse(url=f"/finance?month={quote_plus(month_id)}&error=Z+formulare+se+neodeslaly+zadne+zmeny", status_code=303)
