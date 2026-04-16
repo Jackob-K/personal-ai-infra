@@ -102,6 +102,7 @@ def _render_row(item: dict, category_options: list[str]) -> str:
         or "Nezařazeno"
     )
     category_locked = bool(item.get("category_locked"))
+    category_locked_badge = "" if not category_locked else "<div style='color:#555;margin-top:4px'>Ručně upraveno</div>"
     email_block = ""
     if email_match:
         email_block = (
@@ -146,7 +147,7 @@ def _render_row(item: dict, category_options: list[str]) -> str:
         f"<td>{email_block}</td>"
         f"<td>{html.escape(str(suggestion.get('category', '')))}</td>"
         f"<td><select data-transaction-id='{html.escape(transaction_id)}' data-field='selected_category'>{_category_options(category_options, effective_selected_category)}</select>"
-        f"{'' if not category_locked else '<div style=\"color:#555;margin-top:4px\">Ručně upraveno</div>'}</td>"
+        f"{category_locked_badge}</td>"
         f"<td>{html.escape(str(suggestion.get('confidence', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('reason', '')))}"
         f"{'' if not suggestion.get('matched_on') else ' (' + html.escape(str(suggestion.get('matched_on'))) + ')'}"
