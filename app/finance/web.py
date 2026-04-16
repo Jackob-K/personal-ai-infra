@@ -95,6 +95,7 @@ def _render_row(item: dict, category_options: list[str]) -> str:
     amount = item.get("amount", 0)
     amount_text = f"{float(amount):,.2f}".replace(",", " ").replace(".", ",")
     transaction_id = str(item.get("transaction_id", ""))
+    row_key = transaction_id or f"row-{html.escape(str(item.get('source_row', '')))}"
     effective_selected_category = (
         str(item.get("selected_category", "")).strip()
         or str(suggestion.get("category", "")).strip()
@@ -137,16 +138,16 @@ def _render_row(item: dict, category_options: list[str]) -> str:
             email_block += "</ul>"
     return (
         "<tr>"
-        f"<td>{html.escape(str(item.get('source_row', '')))}</td>"
+        f"<td>{html.escape(str(item.get('source_row', '')))}<input type='hidden' name='row_key' value='{row_key}'></td>"
         f"<td><code>{html.escape(transaction_id[:8])}</code></td>"
         f"<td>{html.escape(str(item.get('booking_date', '')))}</td>"
         f"<td>{html.escape(str(item.get('counterparty', '')))}</td>"
         f"<td>{html.escape(amount_text)} {html.escape(str(item.get('currency', 'CZK')))}</td>"
         f"<td>{html.escape(str(item.get('counterparty_account', '')))}</td>"
-        f"<td><input type='text' name='description__{html.escape(transaction_id)}' data-transaction-id='{html.escape(transaction_id)}' data-field='description' value='{html.escape(str(item.get('description', '')))}' style='width:260px'></td>"
+        f"<td><input type='text' name='description__{row_key}' data-transaction-id='{row_key}' data-field='description' value='{html.escape(str(item.get('description', '')))}' style='width:260px'></td>"
         f"<td>{email_block}</td>"
         f"<td>{html.escape(str(suggestion.get('category', '')))}</td>"
-        f"<td><select name='selected_category__{html.escape(transaction_id)}' data-transaction-id='{html.escape(transaction_id)}' data-field='selected_category'>{_category_options(category_options, effective_selected_category)}</select>"
+        f"<td><select name='selected_category__{row_key}' data-transaction-id='{row_key}' data-field='selected_category'>{_category_options(category_options, effective_selected_category)}</select>"
         f"{category_locked_badge}</td>"
         f"<td>{html.escape(str(suggestion.get('confidence', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('reason', '')))}"

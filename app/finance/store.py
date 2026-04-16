@@ -86,8 +86,8 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
     for item in preview_rows:
         if _month_key(item) != month_id:
             continue
-        transaction_id = str(item.get("transaction_id", "")).strip()
-        update = updates.get(transaction_id)
+        item_key = _row_key(item)
+        update = updates.get(item_key)
         if not update:
             continue
         new_description = update.get("description", str(item.get("description", "")))
@@ -110,8 +110,8 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
     if snapshot:
         snapshot_changed = False
         for item in snapshot.get("rows", []):
-            transaction_id = str(item.get("transaction_id", "")).strip()
-            update = updates.get(transaction_id)
+            item_key = _row_key(item)
+            update = updates.get(item_key)
             if not update:
                 continue
             new_description = update.get("description", str(item.get("description", "")))
@@ -221,3 +221,11 @@ def _write_json(path: Path, payload) -> None:
 def _month_key(item: dict) -> str:
     booking_date = str(item.get("booking_date", "")).strip()
     return booking_date[:7] if len(booking_date) >= 7 else ""
+
+
+def _row_key(item: dict) -> str:
+    transaction_id = str(item.get("transaction_id", "")).strip()
+    if transaction_id:
+        return transaction_id
+    source_row = str(item.get("source_row", "")).strip()
+    return f"row-{source_row}" if source_row else ""

@@ -627,16 +627,23 @@ async def finance_month_save(request: Request) -> RedirectResponse:
                     "selected_category": str(item.get("selected_category", "")).strip(),
                 }
     if not updates:
-        for item in month_rows:
-            transaction_id = str(item.get("transaction_id", "")).strip()
-            if not transaction_id:
+        row_keys = [str(item).strip() for item in form.getlist("row_key") if str(item).strip()]
+        for row_key in row_keys:
+            if not row_key:
                 continue
-            updates[transaction_id] = {
-                "description": str(form.get(f"description__{transaction_id}", item.get("description", ""))).strip(),
+            matching_item = next(
+                (
+                    item for item in month_rows
+                    if (str(item.get("transaction_id", "")).strip() or f"row-{str(item.get('source_row', '')).strip()}") == row_key
+                ),
+                {},
+            )
+            updates[row_key] = {
+                "description": str(form.get(f"description__{row_key}", matching_item.get("description", ""))).strip(),
                 "selected_category": str(
                     form.get(
-                        f"selected_category__{transaction_id}",
-                        item.get("selected_category", "") or (item.get("suggestion") or {}).get("category", "") or item.get("raw_category", ""),
+                        f"selected_category__{row_key}",
+                        matching_item.get("selected_category", "") or (matching_item.get("suggestion") or {}).get("category", "") or matching_item.get("raw_category", ""),
                     )
                 ).strip(),
             }
