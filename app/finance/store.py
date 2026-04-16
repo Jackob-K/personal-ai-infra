@@ -94,10 +94,12 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
         new_category = update.get("selected_category", str(item.get("selected_category", "")))
         if str(item.get("description", "")) != new_description:
             item["description"] = new_description
+            item["description_locked"] = True
             preview_changed = True
             changed += 1
         if str(item.get("selected_category", "")) != new_category:
             item["selected_category"] = new_category
+            item["category_locked"] = True
             preview_changed = True
             changed += 1
     if preview_changed:
@@ -116,9 +118,11 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
             new_category = update.get("selected_category", str(item.get("selected_category", "")))
             if str(item.get("description", "")) != new_description:
                 item["description"] = new_description
+                item["description_locked"] = True
                 snapshot_changed = True
             if str(item.get("selected_category", "")) != new_category:
                 item["selected_category"] = new_category
+                item["category_locked"] = True
                 snapshot_changed = True
         if snapshot_changed:
             snapshots[month_id] = snapshot
@@ -143,6 +147,7 @@ def reset_month_categories(month_id: str) -> int:
         )
         if str(item.get("selected_category", "")).strip() != target:
             item["selected_category"] = target
+            item["category_locked"] = False
             preview_changed = True
             changed += 1
     if preview_changed:
@@ -161,6 +166,7 @@ def reset_month_categories(month_id: str) -> int:
             )
             if str(item.get("selected_category", "")).strip() != target:
                 item["selected_category"] = target
+                item["category_locked"] = False
                 snapshot_changed = True
         if snapshot_changed:
             snapshots[month_id] = snapshot

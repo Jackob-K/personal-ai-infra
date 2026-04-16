@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 from contextlib import asynccontextmanager
 from datetime import date
+import json
 from urllib.parse import quote_plus
 
 from fastapi import FastAPI, HTTPException, Request
@@ -603,24 +604,25 @@ async def finance_month_save(request: Request) -> RedirectResponse:
     if not month_id:
         return RedirectResponse(url="/finance?error=Chybi+mesic", status_code=303)
     updates: dict[str, dict[str, str]] = {}
-    preview_rows = load_preview()
-    snapshots = load_month_snapshots()
-    month_rows = [item for item in preview_rows if _month_key(item) == month_id]
-    if not month_rows and month_id in snapshots:
-        month_rows = list(snapshots[month_id].get("rows", []))
-    for item in month_rows:
-        transaction_id = str(item.get("transaction_id", "")).strip()
-        if not transaction_id:
-            continue
-        updates[transaction_id] = {
-            "description": str(form.get(f"description__{transaction_id}", item.get("description", ""))).strip(),
-            "selected_category": str(
-                form.get(
-                    f"selected_category__{transaction_id}",
-                    item.get("selected_category", "") or (item.get("suggestion") or {}).get("category", "") or item.get("raw_category", ""),
-                )
-            ).strip(),
-        }
+    payload_json = str(form.get("payload_json", "")).strip()
+    if payload_json:
+        try:
+            payload = json.loads(payload_json)
+        except json.JSONDecodeError:
+            return RedirectResponse(url=f"/finance?month={quote_plus(month_id)}&error=Neplatny+payload+z+tabulky", status_code=303)
+        if isinstance(payload, list):
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                transaction_id = str(item.get("transaction_id", "")).strip()
+                if not transaction_id:
+                    continue
+                updates[transaction_id] = {
+                    "description": str(item.get("description", "")).strip(),
+                    "selected_category": str(item.get("selected_category", "")).strip(),
+                }
+    if not updates:
+        return RedirectResponse(url=f"/finance?month={quote_plus(month_id)}&error=Z+formulare+se+neodeslaly+zadne+zmeny", status_code=303)
     changed = save_month_edits(month_id, updates)
     return RedirectResponse(
         url=f"/finance?month={quote_plus(month_id)}&msg={quote_plus(f'Ulozeno zmen: {changed}')}",

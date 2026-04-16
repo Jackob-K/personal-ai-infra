@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 from collections import defaultdict
 
 
@@ -27,8 +28,9 @@ def render_finance_page(
     table = (
         "<p>Zatím není uložený žádný náhled importu.</p>"
         if not month_rows
-        else "<form method='post' action='/finance/month/save'>"
+        else "<form method='post' action='/finance/month/save' id='month-save-form'>"
         f"<input type='hidden' name='month_id' value='{html.escape(selected_month)}'>"
+        "<input type='hidden' name='payload_json' id='month-save-payload' value=''>"
         "<p><button type='submit'>Uložit změny měsíce</button></p>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
         "<thead><tr><th>Řádek</th><th>ID</th><th>Datum</th><th>Protistrana</th><th>Částka</th><th>Účet protistrany</th>"
@@ -82,6 +84,7 @@ def render_finance_page(
         "</div>"
         "<h2>Transakce měsíce</h2>"
         f"{table}"
+        f"{_month_save_script()}"
     )
 
 
@@ -98,6 +101,7 @@ def _render_row(item: dict, category_options: list[str]) -> str:
         or str(item.get("raw_category", "")).strip()
         or "Nezařazeno"
     )
+    category_locked = bool(item.get("category_locked"))
     email_block = ""
     if email_match:
         email_block = (
@@ -138,10 +142,11 @@ def _render_row(item: dict, category_options: list[str]) -> str:
         f"<td>{html.escape(str(item.get('counterparty', '')))}</td>"
         f"<td>{html.escape(amount_text)} {html.escape(str(item.get('currency', 'CZK')))}</td>"
         f"<td>{html.escape(str(item.get('counterparty_account', '')))}</td>"
-        f"<td><input type='text' name='description__{html.escape(transaction_id)}' value='{html.escape(str(item.get('description', '')))}' style='width:260px'></td>"
+        f"<td><input type='text' data-transaction-id='{html.escape(transaction_id)}' data-field='description' value='{html.escape(str(item.get('description', '')))}' style='width:260px'></td>"
         f"<td>{email_block}</td>"
         f"<td>{html.escape(str(suggestion.get('category', '')))}</td>"
-        f"<td><select name='selected_category__{html.escape(transaction_id)}'>{_category_options(category_options, effective_selected_category)}</select></td>"
+        f"<td><select data-transaction-id='{html.escape(transaction_id)}' data-field='selected_category'>{_category_options(category_options, effective_selected_category)}</select>"
+        f"{'' if not category_locked else '<div style=\"color:#555;margin-top:4px\">Ručně upraveno</div>'}</td>"
         f"<td>{html.escape(str(suggestion.get('confidence', '')))}</td>"
         f"<td>{html.escape(str(suggestion.get('reason', '')))}"
         f"{'' if not suggestion.get('matched_on') else ' (' + html.escape(str(suggestion.get('matched_on'))) + ')'}"
@@ -265,3 +270,29 @@ def _top_category_slices(category_sums: dict[str, float]) -> list[tuple[str, flo
 def _fmt_amount(value: float) -> str:
     sign = "-" if value < 0 else ""
     return sign + f"{abs(value):,.2f}".replace(",", " ").replace(".", ",") + " CZK"
+
+
+def _month_save_script() -> str:
+    script = """
+<script>
+(function () {
+  const form = document.getElementById('month-save-form');
+  if (!form) return;
+  form.addEventListener('submit', function () {
+    const payload = [];
+    const byId = new Map();
+    form.querySelectorAll('[data-transaction-id][data-field]').forEach((el) => {
+      const transactionId = el.getAttribute('data-transaction-id');
+      const field = el.getAttribute('data-field');
+      if (!transactionId || !field) return;
+      if (!byId.has(transactionId)) byId.set(transactionId, {transaction_id: transactionId});
+      byId.get(transactionId)[field] = el.value || '';
+    });
+    byId.forEach((value) => payload.push(value));
+    const target = document.getElementById('month-save-payload');
+    if (target) target.value = JSON.stringify(payload);
+  });
+})();
+</script>
+"""
+    return script
