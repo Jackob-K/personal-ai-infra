@@ -16,6 +16,7 @@ from app.finance.store import (
     load_preview,
     load_training_examples,
     merge_training_examples,
+    reset_month_categories,
     save_month_edits,
     save_month_snapshot,
     save_preview,
@@ -602,16 +603,28 @@ async def finance_month_save(request: Request) -> RedirectResponse:
     if not month_id:
         return RedirectResponse(url="/finance?error=Chybi+mesic", status_code=303)
     updates: dict[str, dict[str, str]] = {}
-    for key, value in form.items():
-        if key.startswith("description__"):
-            transaction_id = key.split("__", 1)[1]
-            updates.setdefault(transaction_id, {})["description"] = str(value).strip()
-        elif key.startswith("selected_category__"):
-            transaction_id = key.split("__", 1)[1]
-            updates.setdefault(transaction_id, {})["selected_category"] = str(value).strip()
+    transaction_ids = [str(item).strip() for item in form.getlist("transaction_id") if str(item).strip()]
+    for transaction_id in transaction_ids:
+        updates[transaction_id] = {
+            "description": str(form.get(f"description__{transaction_id}", "")).strip(),
+            "selected_category": str(form.get(f"selected_category__{transaction_id}", "")).strip(),
+        }
     changed = save_month_edits(month_id, updates)
     return RedirectResponse(
         url=f"/finance?month={quote_plus(month_id)}&msg={quote_plus(f'Ulozeno zmen: {changed}')}",
+        status_code=303,
+    )
+
+
+@app.post("/finance/month/reset-categories")
+async def finance_month_reset_categories(request: Request) -> RedirectResponse:
+    form = await request.form()
+    month_id = str(form.get("month_id", "")).strip()
+    if not month_id:
+        return RedirectResponse(url="/finance?error=Chybi+mesic", status_code=303)
+    changed = reset_month_categories(month_id)
+    return RedirectResponse(
+        url=f"/finance?month={quote_plus(month_id)}&msg={quote_plus(f'Obnoveno kategorii: {changed}')}",
         status_code=303,
     )
 

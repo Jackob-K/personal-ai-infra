@@ -61,6 +61,10 @@ def render_finance_page(
         f"<input type='hidden' name='month_id' value='{html.escape(selected_month)}'>"
         "<button type='submit'>Uzavřít měsíc</button>"
         "</form>"
+        "<form method='post' action='/finance/month/reset-categories' style='margin-top:10px'>"
+        f"<input type='hidden' name='month_id' value='{html.escape(selected_month)}'>"
+        "<button type='submit'>Obnovit kategorie z návrhu/původní</button>"
+        "</form>"
         "<h3>Doporučená hlavička</h3>"
         f"<p><code>{html.escape(template_headers)}</code></p>"
         "<p>Nutné minimum je <code>datum</code>, <code>částka</code> a <code>obchodník</code>/protistrana. "
@@ -128,6 +132,7 @@ def _render_row(item: dict, category_options: list[str]) -> str:
             email_block += "</ul>"
     return (
         "<tr>"
+        f"<input type='hidden' name='transaction_id' value='{html.escape(transaction_id)}'>"
         f"<td>{html.escape(str(item.get('source_row', '')))}</td>"
         f"<td><code>{html.escape(transaction_id[:8])}</code></td>"
         f"<td>{html.escape(str(item.get('booking_date', '')))}</td>"

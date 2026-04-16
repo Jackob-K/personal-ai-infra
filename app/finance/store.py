@@ -127,6 +127,48 @@ def save_month_edits(month_id: str, updates: dict[str, dict[str, str]]) -> int:
     return changed
 
 
+def reset_month_categories(month_id: str) -> int:
+    changed = 0
+
+    preview_rows = load_preview()
+    preview_changed = False
+    for item in preview_rows:
+        if _month_key(item) != month_id:
+            continue
+        suggestion = item.get("suggestion") or {}
+        target = (
+            str(suggestion.get("category", "")).strip()
+            or str(item.get("raw_category", "")).strip()
+            or "Nezařazeno"
+        )
+        if str(item.get("selected_category", "")).strip() != target:
+            item["selected_category"] = target
+            preview_changed = True
+            changed += 1
+    if preview_changed:
+        _write_json(FINANCE_PREVIEW_PATH, preview_rows)
+
+    snapshots = load_month_snapshots()
+    snapshot = snapshots.get(month_id)
+    if snapshot:
+        snapshot_changed = False
+        for item in snapshot.get("rows", []):
+            suggestion = item.get("suggestion") or {}
+            target = (
+                str(suggestion.get("category", "")).strip()
+                or str(item.get("raw_category", "")).strip()
+                or "Nezařazeno"
+            )
+            if str(item.get("selected_category", "")).strip() != target:
+                item["selected_category"] = target
+                snapshot_changed = True
+        if snapshot_changed:
+            snapshots[month_id] = snapshot
+            _write_json(FINANCE_MONTHS_PATH, snapshots)
+
+    return changed
+
+
 def load_month_snapshots() -> dict[str, dict]:
     payload = _load_json(FINANCE_MONTHS_PATH, default={})
     return payload if isinstance(payload, dict) else {}
