@@ -199,11 +199,26 @@ def _entry_type_options(selected: str) -> str:
 def _render_month_nav(months: list[str], selected_month: str) -> str:
     if not months:
         return ""
+    current_index = months.index(selected_month) if selected_month in months else -1
+    newer_link = ""
+    older_link = ""
+    if current_index > 0:
+        newer = months[current_index - 1]
+        newer_link = f"<a href='/finance?month={html.escape(newer)}' style='margin-right:12px'>&larr; novější</a>"
+    if 0 <= current_index < len(months) - 1:
+        older = months[current_index + 1]
+        older_link = f"<a href='/finance?month={html.escape(older)}' style='margin-left:12px'>starší &rarr;</a>"
     links = []
     for month in months:
         style = "font-weight:bold;text-decoration:underline;" if month == selected_month else ""
         links.append(f"<a href='/finance?month={html.escape(month)}' style='margin-right:12px;{style}'>{html.escape(month)}</a>")
-    return "<div style='margin-bottom:16px'><b>Měsíce:</b> " + "".join(links) + "</div>"
+    return (
+        "<div style='margin-bottom:8px'><b>Časová osa:</b> "
+        f"{newer_link}{older_link}</div>"
+        "<div style='margin-bottom:16px'><b>Měsíce:</b> "
+        + "".join(links)
+        + "</div>"
+    )
 
 
 def _render_month_summary(rows: list[dict], selected_month: str, is_closed_month: bool) -> str:

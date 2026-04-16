@@ -34,9 +34,29 @@ COLUMN_ALIASES = {
         "account_number",
     },
     "own_account": {"own_account", "můj účet", "muj ucet", "source_account", "účet", "ucet"},
-    "note": {"poznámka", "poznamka", "note", "memo", "message", "popis"},
+    "note": {
+        "poznámka",
+        "poznamka",
+        "note",
+        "memo",
+        "message",
+        "popis",
+        "zpráva pro mě",
+        "zprava pro me",
+        "místo použití karty",
+        "misto pouziti karty",
+    },
     "raw_category": {"kategorie", "category"},
 }
+
+
+def decode_statement_bytes(raw: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "cp1250", "latin1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
 
 
 def parse_transactions(content: str) -> list[FinanceTransaction]:

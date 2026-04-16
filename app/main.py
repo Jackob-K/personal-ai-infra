@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.finance.categorizer import categorize_transactions, suggest_category
 from app.finance.email_matcher import rematch_preview_rows
-from app.finance.importer import extract_training_examples, parse_transactions
+from app.finance.importer import decode_statement_bytes, extract_training_examples, parse_transactions
 from app.finance.store import (
     load_month_snapshots,
     load_preview,
@@ -571,7 +571,7 @@ async def finance_preview(request: Request) -> RedirectResponse:
     content = csv_text
     if upload and getattr(upload, "filename", ""):
         raw = await upload.read()
-        content = raw.decode("utf-8-sig")
+        content = decode_statement_bytes(raw)
 
     if not content.strip():
         return RedirectResponse(url="/finance?error=Chybi+CSV+soubor+nebo+vlozeny+text", status_code=303)
